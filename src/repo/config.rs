@@ -1,8 +1,9 @@
 use std::fs;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::path::PathBuf;
 use anyhow::Context;
 use serde::Deserialize;
+use std::io::Write;
 
 #[derive(Deserialize)]
 pub struct ConfigFields {
@@ -20,8 +21,18 @@ impl Config {
     pub fn default(path: impl Into<PathBuf>) -> anyhow::Result<Self> {
         let path = path.into();
 
-        File::create(&path)
+        let mut file = File::create(&path)
             .with_context(|| format!("Cannot initialize config file at {:?}", path))?;
+
+        writeln!(
+            file,
+                "\
+# Configuration file for git
+# Values can be set either by modifying the file or by using the set command.
+#
+# user_name  =
+# user_email ="
+        )?;
 
         Ok(Self {
             path,
@@ -44,5 +55,15 @@ impl Config {
             user_name: fields.user_name,
             user_email: fields.user_email
         })
+    }
+
+    pub fn set(&self, key: String, value: String) -> anyhow::Result<()> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .append(true)
+            .open(&self.path)?;
+
+        writeln!(file, r#"{key} = "{value}""#)?;
+        Ok(())
     }
 }

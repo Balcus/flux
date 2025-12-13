@@ -11,6 +11,10 @@ pub enum Commands {
     Init {
         path: Option<String>
     },
+    Set {
+        key: String,
+        value: String
+    },
     CatFile {
         #[arg(short = 'p')]
         pretty_print: bool,
