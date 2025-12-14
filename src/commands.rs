@@ -1,4 +1,4 @@
-use crate::{repo::repository::Repository, traits::GitObject};
+use crate::repo::repository::Repository;
 use std::path::PathBuf;
 
 pub fn set(key: String, value: String) -> Result<(), anyhow::Error> {
@@ -15,7 +15,7 @@ pub fn cat_file(hash: String) -> Result<(), anyhow::Error> {
 
 pub fn hash_object(path: String, write: bool) -> Result<(), anyhow::Error> {
     let repository = Repository::open(None::<PathBuf>)?;
-    let hash = crate::objects::blob::Blob::hash_object(repository.work_tree, path, write)?;
-    println!("{}", hash);
+    let hash = repository.hash_object(path, write)?;
+    println!("{hash}");
     Ok(())
 }
