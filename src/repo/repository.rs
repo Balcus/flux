@@ -1,4 +1,5 @@
 use crate::objects::blob::Blob;
+use crate::objects::tree::Tree;
 use crate::repo::config::Config;
 use crate::repo::object_type::ObjectType;
 use anyhow::{Context, bail};
@@ -121,7 +122,7 @@ impl Repository {
         match object_type {
             ObjectType::Blob => {
                 output = Blob::cat_file(size, content)?;
-            }
+            },
             _ => {
                 anyhow::bail!("cat_file currently supports only blob objects");
             }
@@ -206,5 +207,15 @@ impl Repository {
         fs::write(dest, &compressed)?;
 
         Ok(tree_hash)
+    }
+
+    pub fn ls_tree(&self, hash: String) -> anyhow::Result<()> {
+        let (object_type, size, content) = self.read_object(hash)?;
+        let output = match object_type {
+            ObjectType::Tree => Tree::ls_tree(size, content)?,
+            _ => anyhow::bail!("Unsupported object type"),
+        };
+        println!("{output}");
+        Ok(())
     }
 }

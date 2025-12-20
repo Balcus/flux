@@ -9,9 +9,8 @@ fn main() -> Result<(), anyhow::Error> {
         Commands::Set { key, value } => { let _ = commands::set(key, value); },
         Commands::CatFile { object_hash, .. } => { let _ = commands::cat_file(object_hash); },
         Commands::HashObject { path, write } => { let _ = commands::hash_object(path, write); },
-        Commands::LsTree { .. } => {}
+        Commands::LsTree { tree_hash, .. } => { let _ = commands::ls_tree(tree_hash); }
         Commands::Add { .. } => {}
     }
-
     Ok(())
 }

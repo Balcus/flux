@@ -1,3 +1,4 @@
+use anyhow::Ok;
 use flate2::write::ZlibEncoder;
 use sha1::{Digest, Sha1};
 use std::io::Write;
@@ -20,5 +21,27 @@ impl Tree {
         let compressed = encoder.finish()?;
 
         Ok((hash, compressed))
+    }
+
+    pub fn ls_tree(_size: usize, content: Vec<u8>) -> anyhow::Result<String> {
+        let mut result: String = String::new();
+        let mut i = 0;
+
+        while i < content.len() {
+            let mode_end = content[i..].iter().position(|&b| b == b' ').unwrap();
+            let mode = std::str::from_utf8(&content[i..i + mode_end])?;
+            i += mode_end + 1;
+
+            let name_end = content[i..].iter().position(|&b| b == b'\0').unwrap();
+            let name = std::str::from_utf8(&content[i..i + name_end])?;
+            i += name_end + 1;
+
+            let hash = hex::encode(&content[i..i + 20]);
+            i += 20;
+
+            result.push_str(&format!("{mode} {name} {hash}\n"));
+        }
+
+        Ok(result)
     }
 }

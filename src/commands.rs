@@ -19,3 +19,9 @@ pub fn hash_object(path: String, write: bool) -> Result<(), anyhow::Error> {
     println!("{hash}");
     Ok(())
 }
+
+pub fn ls_tree(hash: String) -> anyhow::Result<()> {
+    let repository = Repository::open(None::<PathBuf>)?;
+    repository.ls_tree(hash)?;
+    Ok(())
+}
