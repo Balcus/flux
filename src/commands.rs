@@ -24,3 +24,10 @@ pub fn ls_tree(hash: String) -> anyhow::Result<()> {
     repository.ls_tree(hash)?;
     Ok(())
 }
+
+pub fn commit_tree(tree_hash: String, message: String) -> anyhow::Result<()> {
+    let repository = Repository::open(None)?;
+    let hash = repository.commit_tree(tree_hash, message)?;
+    println!("{hash}");
+    Ok(())
+}

@@ -3,17 +3,17 @@ use clap::{Parser, Subcommand};
 #[derive(Parser, Debug)]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Commands
+    pub command: Commands,
 }
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     Init {
-        path: Option<String>
+        path: Option<String>,
     },
     Set {
         key: String,
-        value: String
+        value: String,
     },
     CatFile {
         #[arg(short = 'p')]
@@ -31,9 +31,15 @@ pub enum Commands {
         #[arg(long = "name-only")]
         name_only: bool,
 
-        tree_hash: String
+        tree_hash: String,
     },
     Add {
-        path: String
-    }
+        path: String,
+    },
+    CommitTree {
+        tree_hash: String,
+
+        #[arg(short = 'm', long = "message")]
+        message: String,
+    },
 }

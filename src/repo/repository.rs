@@ -1,8 +1,12 @@
+use crate::objects::blob;
+use crate::objects::commit;
+use crate::objects::tree;
 use crate::repo::config::Config;
-use crate::repo::utils::{self, HashResult, TreeEntry};
+use crate::shared::types::object_type::ObjectType;
+use crate::utils;
 use anyhow::{Context, bail};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub struct Repository {
     pub work_tree: PathBuf,
@@ -68,89 +72,41 @@ impl Repository {
 
         let result = if metadata.is_file() {
             let content = fs::read(&full_path)?;
-            utils::hash_blob(content)?
+            let blob = blob::hash_blob(content)?;
+
+            if write {
+                utils::write_object(&self.git_dir, &blob.object_hash, &blob.compressed_content)?;
+            }
+
+            blob
         } else if metadata.is_dir() {
-            self.hash_tree_recursive(&full_path)?
+            let builder = tree::TreeBuilder {
+                work_tree: &self.work_tree,
+                git_dir: &self.git_dir,
+            };
+
+            builder.write_tree(&full_path)?
         } else {
             bail!("Unsupported file type");
         };
 
-        if write {
-            utils::write_object(
-                &self.git_dir,
-                &result.object_hash,
-                &result.compressed_content,
-            )?;
-        }
-
         Ok(result.object_hash)
-    }
-
-    fn hash_tree_recursive(&self, path: &Path) -> anyhow::Result<HashResult> {
-        let entries = self.collect_tree_entries(path)?;
-        let tree_content = utils::build_tree_content(entries);
-        utils::hash_tree(tree_content)
-    }
-
-    fn collect_tree_entries(&self, path: &Path) -> anyhow::Result<Vec<TreeEntry>> {
-        let mut entries = Vec::new();
-
-        for entry in fs::read_dir(path)? {
-            let entry = entry?;
-            let entry_path = entry.path();
-
-            if entry_path.file_name().and_then(|n| n.to_str()) == Some(".git") {
-                continue;
-            }
-
-            let metadata = fs::metadata(&entry_path)?;
-            let name = entry
-                .file_name()
-                .into_string()
-                .map_err(|_| anyhow::anyhow!("Unsupported file name"))?;
-
-            if metadata.is_file() {
-                let relative_path = entry_path
-                    .strip_prefix(&self.work_tree)?
-                    .to_string_lossy()
-                    .to_string();
-
-                let hash = self.hash_object(relative_path, true)?;
-                entries.push(TreeEntry {
-                    mode: "100644".to_string(),
-                    entry_type: "blob".into(),
-                    hash,
-                    name,
-                });
-            } else if metadata.is_dir() {
-                let result = self.hash_tree_recursive(&entry_path)?;
-
-                utils::write_object(
-                    &self.git_dir,
-                    &result.object_hash,
-                    &result.compressed_content,
-                )?;
-
-                entries.push(TreeEntry {
-                    mode: "040000".to_string(),
-                    entry_type: "tree".into(),
-                    hash: result.object_hash,
-                    name,
-                });
-            }
-        }
-
-        Ok(entries)
     }
 
     pub fn cat_file(&self, object_hash: String) -> anyhow::Result<()> {
         let object = utils::read_object(&self.git_dir, &object_hash)?;
 
         match object.object_type {
-            utils::ObjectType::Blob => {
-                let output =
-                    String::from_utf8(object.content).context("Blob contains invalid UTF-8")?;
+            ObjectType::Blob => {
+                let output = String::from_utf8(object.decompressed_content)
+                    .context("Blob contains invalid UTF-8")?;
                 print!("{}", output);
+            }
+            ObjectType::Tree => {
+                self.ls_tree(object_hash)?;
+            }
+            ObjectType::Commit => {
+                commit::show_commit(&self.git_dir, object_hash)?;
             }
             _ => bail!("cat_file currently supports only blob objects"),
         }
@@ -162,19 +118,15 @@ impl Repository {
         let object = utils::read_object(&self.git_dir, &tree_hash)?;
 
         match object.object_type {
-            utils::ObjectType::Tree => {
+            ObjectType::Tree => {
                 let mut result: String = String::new();
                 let mut i = 0;
-                let content = object.content;
+                let content = object.decompressed_content;
 
                 while i < content.len() {
                     let mode_end = content[i..].iter().position(|&b| b == b' ').unwrap();
                     let mode = std::str::from_utf8(&content[i..i + mode_end])?;
                     i += mode_end + 1;
-
-                    let type_end = content[i..].iter().position(|&b| b == b' ').unwrap();
-                    let object_type = std::str::from_utf8(&content[i..i + type_end])?;
-                    i += type_end + 1;
 
                     let name_end = content[i..].iter().position(|&b| b == b'\0').unwrap();
                     let name = std::str::from_utf8(&content[i..i + name_end])?;
@@ -183,13 +135,46 @@ impl Repository {
                     let hash = hex::encode(&content[i..i + 20]);
                     i += 20;
 
-                    result.push_str(&format!("{mode} {object_type} {name} {hash}\n"));
+                    let object_type = if mode.starts_with("040") {
+                        "tree"
+                    } else {
+                        "blob"
+                    };
+
+                    result.push_str(&format!("{mode} {object_type} {hash} {name}\n"));
                 }
+
                 print!("{}", result);
             }
             _ => bail!("ls_tree requires a tree object"),
         }
-
         Ok(())
+    }
+
+    pub fn commit_tree(&self, tree_hash: String, message: String) -> anyhow::Result<String> {
+        let user_name =
+            self.config.user_name.clone().context(
+                "Please configure user settings (user_name) in order to create a commit",
+            )?;
+
+        let user_email =
+            self.config.user_email.clone().context(
+                "Please configure user settings (user_email) in order to create a commit",
+            )?;
+
+        let object = utils::read_object(&self.git_dir, &tree_hash)?;
+
+        let hash = match object.object_type {
+            ObjectType::Tree => commit::commit_tree(
+                &self.git_dir,
+                user_name,
+                user_email,
+                tree_hash,
+                None,
+                message,
+            )?,
+            _ => bail!("Can only commit tree objects"),
+        };
+        Ok(hash)
     }
 }
