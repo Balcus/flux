@@ -37,7 +37,7 @@ pub enum Commands {
         path: String,
     },
     Delete {
-        path: String
+        path: String,
     },
     CommitTree {
         tree_hash: String,
@@ -48,7 +48,9 @@ pub enum Commands {
         #[arg(short = 'p', long = "parent")]
         parent_hash: Option<String>,
     },
-    WriteIndex {
-        
-    }
+    WriteIndex {},
+    Commit {
+        #[arg(short = 'm', long = "message")]
+        message: String,
+    },
 }

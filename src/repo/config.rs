@@ -66,4 +66,11 @@ impl Config {
         writeln!(file, r#"{key} = "{value}""#)?;
         Ok(())
     }
+
+    pub fn get(&self) -> (String, String) {
+    (
+        self.user_name.clone().unwrap_or("User name is not set".to_string()),
+        self.user_email.clone().unwrap_or("User email is not set".to_string())
+    )
+}
 }

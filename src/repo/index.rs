@@ -13,10 +13,10 @@ pub struct Index {
 }
 
 impl Index {
-    pub fn empty(git_dir: &Path) -> anyhow::Result<Self> {
+    pub fn empty(store_dir: &Path) -> anyhow::Result<Self> {
         let empty_obj = JsonValue::new_object();
         let json_str = empty_obj.dump();
-        let path = git_dir.join("index");
+        let path = store_dir.join("index");
         fs::write(&path, json_str)?;
         Ok(Index {
             map: HashMap::new(),
@@ -24,8 +24,8 @@ impl Index {
         })
     }
 
-    pub fn load(git_dir: &Path) -> anyhow::Result<Self> {
-        let path = git_dir.join("index");
+    pub fn load(store_dir: &Path) -> anyhow::Result<Self> {
+        let path = store_dir.join("index");
 
         let content = fs::read_to_string(&path)
             .with_context(|| format!("Failed to read index file at {:?}", path))?;

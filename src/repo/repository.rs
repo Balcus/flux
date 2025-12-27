@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 pub struct Repository {
     pub work_tree: PathBuf,
-    pub git_dir: PathBuf,
+    pub store_dir: PathBuf,
     pub config: Config,
     pub index: Index,
 }
@@ -22,25 +22,26 @@ impl Repository {
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
 
-        let git_dir = work_tree.join(".git");
+        let store_dir = work_tree.join(".flux");
 
-        if git_dir.join("config").exists() && !force {
+        if store_dir.join("config").exists() && !force {
             bail!("Repository already initialized");
         }
 
-        fs::create_dir_all(&git_dir)?;
-        fs::create_dir(&git_dir.join("objects"))?;
-        fs::create_dir(&git_dir.join("refs"))?;
-        let config = Config::default(&git_dir.join("config"))?;
-        fs::write(&git_dir.join("HEAD"), "ref: refs/heads/main\n")?;
-        fs::write(&git_dir.join("index"), "{}")?;
-        let index = Index::empty(&git_dir)?;
+        fs::create_dir_all(&store_dir)?;
+        fs::create_dir(&store_dir.join("objects"))?;
+        fs::create_dir(&store_dir.join("refs"))?;
+        fs::create_dir(&store_dir.join("refs/heads"))?;
+        let config = Config::default(&store_dir.join("config"))?;
+        fs::write(&store_dir.join("HEAD"), "ref: refs/heads/main\n")?;
+        fs::write(&store_dir.join("index"), "{}")?;
+        let index = Index::empty(&store_dir)?;
         println!("Initialized repository");
 
         Ok(Self {
             work_tree,
             index,
-            git_dir,
+            store_dir,
             config,
         })
     }
@@ -50,21 +51,21 @@ impl Repository {
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
 
-        let git_dir = work_tree.join(".git");
+        let store_dir = work_tree.join(".flux");
 
-        if !git_dir.exists() {
+        if !store_dir.exists() {
             bail!("Not a git repository");
         }
 
-        let config_path = git_dir.join("config");
+        let config_path = store_dir.join("config");
         let config = Config::from(&config_path)?;
-        let index = Index::load(&git_dir)?;
+        let index = Index::load(&store_dir)?;
 
         Ok(Self {
             config,
             work_tree,
-            git_dir,
-            index
+            store_dir,
+            index,
         })
     }
 
@@ -76,17 +77,17 @@ impl Repository {
     pub fn hash_object(&self, path: String, write: bool) -> anyhow::Result<String> {
         let full_path = self.work_tree.join(&path);
         let hash = if write {
-            let result = write_object(&self.git_dir, &self.work_tree, &full_path)?;
+            let result = write_object(&self.store_dir, &self.work_tree, &full_path)?;
             result.hash
         } else {
-            utils::get_hash(&self.git_dir, &self.work_tree, &full_path)?
+            utils::get_hash(&self.store_dir, &self.work_tree, &full_path)?
         };
-        
+
         Ok(hash)
     }
 
     pub fn cat_file(&self, object_hash: String) -> anyhow::Result<()> {
-        let object = utils::read_object(&self.git_dir, &object_hash)?;
+        let object = utils::read_object(&self.store_dir, &object_hash)?;
 
         match object.object_type {
             ObjectType::Blob => {
@@ -98,7 +99,7 @@ impl Repository {
                 self.ls_tree(object_hash)?;
             }
             ObjectType::Commit => {
-                commit::show_commit(&self.git_dir, object_hash)?;
+                commit::show_commit(&self.store_dir, object_hash)?;
             }
             _ => bail!("cat_file currently supports only blob objects"),
         }
@@ -107,7 +108,7 @@ impl Repository {
     }
 
     pub fn ls_tree(&self, tree_hash: String) -> anyhow::Result<()> {
-        let object = utils::read_object(&self.git_dir, &tree_hash)?;
+        let object = utils::read_object(&self.store_dir, &tree_hash)?;
 
         match object.object_type {
             ObjectType::Tree => {
@@ -143,22 +144,17 @@ impl Repository {
         Ok(())
     }
 
-    pub fn commit_tree(&self, tree_hash: String, message: String, parent_hash: Option<String>) -> anyhow::Result<String> {
-        let user_name =
-            self.config.user_name.clone().context(
-                "Please configure user settings (user_name) in order to create a commit",
-            )?;
-
-        let user_email =
-            self.config.user_email.clone().context(
-                "Please configure user settings (user_email) in order to create a commit",
-            )?;
-
-        let object = utils::read_object(&self.git_dir, &tree_hash)?;
-
+    pub fn commit_tree(
+        &self,
+        tree_hash: String,
+        message: String,
+        parent_hash: Option<String>,
+    ) -> anyhow::Result<String> {
+        let (user_name, user_email) = self.config.get();
+        let object = utils::read_object(&self.store_dir, &tree_hash)?;
         let hash = match object.object_type {
             ObjectType::Tree => commit::commit_tree(
-                &self.git_dir,
+                &self.store_dir,
                 user_name,
                 user_email,
                 tree_hash,
@@ -172,14 +168,14 @@ impl Repository {
 
     pub fn add(&mut self, path: &str) -> anyhow::Result<()> {
         let path = self.work_tree.join(path);
-        let res = utils::write_object(&self.git_dir, &self.work_tree, &path)?;
+        let res = utils::write_object(&self.store_dir, &self.work_tree, &path)?;
         if let Some(s) = path.to_str() {
             self.index.add(s.into(), res.hash)?;
             self.index.flush()?;
-        }else {
+        } else {
             bail!("Could not add file to index.")
         }
-        
+
         Ok(())
     }
 
@@ -188,31 +184,31 @@ impl Repository {
         if let Some(s) = path.to_str() {
             self.index.remove(s.into())?;
             self.index.flush()?;
-        }else {
+        } else {
             bail!("Could not remove file from index.")
         }
-        
+
         Ok(())
     }
 
     pub fn tree_from_index(&self) -> anyhow::Result<String> {
         let mut entries = Vec::new();
-        
+
         for (path, hash) in &self.index.map {
             let name = Path::new(path)
                 .file_name()
                 .and_then(|n| n.to_str())
                 .context("Invalid filename in index")?
                 .to_string();
-            
-            let object = utils::read_object(&self.git_dir, hash)?;
-            
+
+            let object = utils::read_object(&self.store_dir, hash)?;
+
             let (mode, entry_type) = match object.object_type {
                 ObjectType::Blob => ("100644".to_string(), "blob".to_string()),
                 ObjectType::Tree => ("040000".to_string(), "tree".to_string()),
                 _ => bail!("Unexpected object type in index"),
             };
-            
+
             entries.push(TreeEntry {
                 mode,
                 entry_type,
@@ -220,11 +216,49 @@ impl Repository {
                 name,
             });
         }
-        
+
         let tree_content = tree::build_tree_content(entries);
         let result = tree::hash_tree(tree_content)?;
-        utils::store_object(&self.git_dir, &result.object_hash, &result.compressed_content)?;
-        
+        utils::store_object(
+            &self.store_dir,
+            &result.object_hash,
+            &result.compressed_content,
+        )?;
+
         Ok(result.object_hash)
+    }
+
+    pub fn commit(&mut self, message: String) -> anyhow::Result<String> {
+        let index_tree_hash = self.tree_from_index()?;
+        let (user_name, user_email) = self.config.get();
+
+        let branch_head = self.store_dir.join("refs/heads/main");
+        let parent = fs::read_to_string(&branch_head)
+            .unwrap_or_default()
+            .trim()
+            .to_string();
+
+        let commit_hash = if parent.is_empty() {
+            commit::commit_tree(
+                &self.store_dir,
+                user_name,
+                user_email,
+                index_tree_hash,
+                None,
+                message,
+            )?
+        } else {
+            commit::commit_tree(
+                &self.store_dir,
+                user_name,
+                user_email,
+                index_tree_hash,
+                Some(parent),
+                message,
+            )?
+        };
+
+        fs::write(branch_head, &commit_hash)?;
+        Ok(commit_hash)
     }
 }

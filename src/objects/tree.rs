@@ -7,7 +7,7 @@ use std::path::Path;
 
 pub struct TreeBuilder<'a> {
     pub work_tree: &'a Path,
-    pub git_dir: &'a Path,
+    pub store_dir: &'a Path,
 }
 
 impl<'a> TreeBuilder<'a> {
@@ -17,7 +17,7 @@ impl<'a> TreeBuilder<'a> {
         let result = hash_tree(tree_content)?;
 
         utils::store_object(
-            self.git_dir,
+            self.store_dir,
             &result.object_hash,
             &result.compressed_content,
         )?;
@@ -49,7 +49,7 @@ impl<'a> TreeBuilder<'a> {
                 let content = fs::read(&entry_path)?;
                 let blob = blob::hash_blob(content)?;
 
-                utils::store_object(self.git_dir, &blob.object_hash, &blob.compressed_content)?;
+                utils::store_object(self.store_dir, &blob.object_hash, &blob.compressed_content)?;
 
                 entries.push(TreeEntry {
                     mode: "100644".into(),

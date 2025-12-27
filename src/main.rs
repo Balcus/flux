@@ -33,7 +33,10 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Add { path } => commands::add(path)?,
         Commands::Delete { path } => commands::remove(path)?,
-        Commands::WriteIndex { } => commands::write_index()?,
+        Commands::WriteIndex {} => commands::write_index()?,
+        Commands::Commit { message } => {
+            commands::commit(message)?;
+        }
     }
     Ok(())
 }
