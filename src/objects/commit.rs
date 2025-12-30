@@ -1,4 +1,4 @@
-use crate::{shared::types::object_type::ObjectType, utils};
+use crate::{shared::{self, types::object_type::ObjectType}, utils};
 use anyhow::bail;
 use chrono::Local;
 use std::path::Path;
@@ -61,6 +61,26 @@ pub fn get_parent_hash(store_dir: &Path, commit_hash: String) -> anyhow::Result<
     let content = String::from_utf8(commit.decompressed_content)?;
     for line in content.lines() {
         if let Some(rest) = line.strip_prefix("parent ") {
+            return Ok(Some(rest.trim().to_string()));
+        }
+
+        if line.is_empty() {
+            break;
+        }
+    }
+
+    Ok(None)
+}
+
+pub fn get_tree_hash(commit_obj: shared::types::generic_object::GenericObject) -> anyhow::Result<Option<String>> {
+    if commit_obj.object_type != ObjectType::Commit {
+        bail!("Expected commit object");
+    }
+
+    let content = String::from_utf8(commit_obj.decompressed_content)?;
+
+    for line in content.lines() {
+        if let Some(rest) = line.strip_prefix("tree ") {
             return Ok(Some(rest.trim().to_string()));
         }
 

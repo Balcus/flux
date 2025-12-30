@@ -1,7 +1,8 @@
 use crate::objects::blob;
+use crate::shared::types::object_type::ObjectType;
 use crate::shared::types::{hash_result::HashResult, tree_entry::TreeEntry};
-use crate::utils;
-use anyhow::{Context, Result};
+use crate::utils::{self, read_object};
+use anyhow::{Context, Result, bail};
 use std::fs;
 use std::path::Path;
 
@@ -117,4 +118,65 @@ pub fn build_tree_content(mut entries: Vec<TreeEntry>) -> Vec<u8> {
     }
 
     tree_content
+}
+
+pub fn ls_tree(store_path: &Path, tree_hash: &str) -> anyhow::Result<String> {
+    let entries = parse_tree(store_path, tree_hash)?;
+    let mut result = String::new();
+    
+    for entry in entries {
+        let object_type = if entry.mode.starts_with("040") {
+            "tree"
+        } else {
+            "blob"
+        };
+        
+        result.push_str(&format!(
+            "{} {} {} {}\n",
+            entry.mode, object_type, entry.hash, entry.name
+        ));
+    }
+    
+    Ok(result)
+}
+
+pub fn parse_tree(store_path: &Path, tree_hash: &str) -> Result<Vec<TreeEntry>> {
+    let object = read_object(&store_path, tree_hash)?;
+    
+    match object.object_type {
+        ObjectType::Tree => {},
+        _ => bail!("Unsupported object type")
+    };
+    
+    let mut entries = Vec::new();
+    let mut pos = 0;
+    let content = object.decompressed_content;
+    
+    while pos < content.len() {
+        let space_pos = content[pos..]
+            .iter()
+            .position(|&b| b == b' ')
+            .context("Invalid tree format")?;
+        
+        let mode = String::from_utf8_lossy(&content[pos..pos + space_pos]).to_string();
+        pos += space_pos + 1;
+        
+        let null_pos = content[pos..]
+            .iter()
+            .position(|&b| b == 0)
+            .context("Invalid tree format")?;
+        
+        let name = String::from_utf8_lossy(&content[pos..pos + null_pos]).to_string();
+        pos += null_pos + 1;
+        
+        let hash_bytes = &content[pos..pos + 20];
+        let hash = hash_bytes.iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>();
+        pos += 20;
+        
+        entries.push(TreeEntry { mode, name, hash, entry_type: "tree".to_string() });
+    }
+
+    Ok(entries)
 }

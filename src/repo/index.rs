@@ -65,4 +65,13 @@ impl Index {
 
         Ok(())
     }
+
+    pub fn clear(&mut self) -> anyhow::Result<()> {
+        self.map.clear();
+        self.flush()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
 }

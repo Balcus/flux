@@ -1,13 +1,14 @@
 use clap::Parser;
 use flux::{
-    app::tui, cli::{Cli, Commands}, commands, repo::repository::Repository
+    cli::{BranchCommands, Cli, Commands},
+    commands,
+    repo::repository::Repository,
 };
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::App {} => { let _ = tui::start(); },
         Commands::Init { path } => {
             Repository::init(path, false)?;
         }
@@ -35,8 +36,16 @@ fn main() -> anyhow::Result<()> {
         Commands::WriteIndex {} => commands::write_index()?,
         Commands::Commit { message } => {
             commands::commit(message)?;
-        },
+        }
         Commands::Log {} => commands::log()?,
+        Commands::Branch { subcommand } => match subcommand {
+            BranchCommands::Show {} => commands::show_branches()?,
+            BranchCommands::New { name } => commands::create_branch(name)?,
+            BranchCommands::Delete { name } => commands::delete_branch(name)?,
+            BranchCommands::Switch { name, force } => {
+                commands::switch_branch(name, force)?
+            }
+        },
     }
     Ok(())
 }

@@ -25,7 +25,11 @@ pub fn ls_tree(hash: String) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn commit_tree(tree_hash: String, message: String, parent_hash: Option<String>) -> anyhow::Result<()> {
+pub fn commit_tree(
+    tree_hash: String,
+    message: String,
+    parent_hash: Option<String>,
+) -> anyhow::Result<()> {
     let repository = Repository::open(None)?;
     let hash = repository.commit_tree(tree_hash, message, parent_hash)?;
     println!("{hash}");
@@ -62,6 +66,35 @@ pub fn commit(message: String) -> anyhow::Result<String> {
 
 pub fn log() -> anyhow::Result<()> {
     let repository = Repository::open(None)?;
-    repository.log()?;
+    repository.log(None)?;
+    Ok(())
+}
+
+pub fn split(name: String) -> anyhow::Result<()> {
+    let repository = Repository::open(None)?;
+    repository.new_branch(name)?;
+    Ok(())
+}
+
+pub fn show_branches() -> anyhow::Result<()> {
+    let repository = Repository::open(None)?;
+    let output = repository.show_branches()?;
+    println!("{output}");
+    Ok(())
+}
+
+pub fn create_branch(name: String) -> anyhow::Result<()> {
+    let repository = Repository::open(None)?;
+    repository.new_branch(name)?;
+    Ok(())
+}
+
+pub fn delete_branch(_name: String) -> anyhow::Result<()> {
+    todo!()
+}
+
+pub fn switch_branch(name: String, force: bool) -> anyhow::Result<()> {
+    let mut repository = Repository::open(None)?;
+    repository.switch_branch(name, force)?;
     Ok(())
 }
