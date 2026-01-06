@@ -81,15 +81,6 @@ pub enum Commands {
         path: String,
     },
 
-    /// List the contents of a tree object (same behaviour as cat-file)
-    LsTree {
-        /// Show only entry names
-        #[arg(long = "name-only")]
-        name_only: bool,
-
-        tree_hash: String,
-    },
-
     /// Add a file or directory to the staging area
     Add { path: String },
 
@@ -110,9 +101,6 @@ pub enum Commands {
         #[arg(short = 'p', long = "parent")]
         parent_hash: Option<String>,
     },
-
-    /// Write the current staging area to the index
-    WriteIndex {},
 
     /// Create a new commit from the current index
     Commit {

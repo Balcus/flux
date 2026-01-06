@@ -1,27 +1,33 @@
-use crate::objects::{commit, tree};
+use crate::objects::blob::Blob;
+use crate::objects::commit::Commit;
+use crate::objects::object_type::{FluxObject, ObjectType};
+use crate::objects::tree::Tree;
 use crate::repo::branch::Branch;
 use crate::repo::config::Config;
 use crate::repo::index::Index;
-use crate::shared::types::object_type::ObjectType;
-use crate::shared::types::tree_entry::TreeEntry;
-use crate::utils;
-use crate::utils::write_object;
+use crate::repo::object_store::ObjectStore;
+use crate::repo::work_tree::WorkTree;
 use anyhow::{Context, bail};
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
+// TODO: 
+// - finish refactoring
+// - standardized error handling
+// - cleanup cli commands and make them simpler
+// - diff feature
+
 pub struct Repository {
-    pub work_tree: PathBuf,
+    pub work_tree: WorkTree,
     pub store_dir: PathBuf,
     pub config: Config,
     pub index: Index,
     pub head: String,
     pub branches: Vec<Branch>,
+    pub object_store: ObjectStore,
 }
 
-// TODO: really needs a refactor!!
 impl Repository {
-
     fn load_branches(&mut self) -> anyhow::Result<()> {
         let heads_dir = self.store_dir.join("refs/heads");
         let current_branch_name = self.branch_name();
@@ -54,79 +60,25 @@ impl Repository {
         Ok(())
     }
 
-    fn branch_name(&self) -> Option<String> {
+    pub fn branch_name(&self) -> Option<String> {
         self.head.strip_prefix("refs/heads/").map(String::from)
     }
 
-    fn head_commit(&self) -> anyhow::Result<Option<String>> {
+    pub fn head_commit(&self) -> Option<String> {
         let branch_path = self.store_dir.join(&self.head);
-        Ok(fs::read_to_string(branch_path)
-            .ok()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty()))
-    }
 
-    fn restore_working_tree(&self, commit_hash: &str) -> anyhow::Result<()> {
-        let commit = utils::read_object(&self.store_dir, commit_hash)?;
-
-        if commit.object_type != ObjectType::Commit {
-            bail!("Expected commit object");
+        if !branch_path.exists() {
+            return None;
         }
 
-        let content = String::from_utf8(commit.decompressed_content)?;
-        let tree_hash = content
-            .lines()
-            .find(|line| line.starts_with("tree "))
-            .and_then(|line| line.strip_prefix("tree "))
-            .context("Commit has no tree")?
-            .trim()
-            .to_string();
+        let content = fs::read_to_string(&branch_path).ok()?;
 
-        self.restore_tree(&tree_hash, &self.work_tree)?;
-
-        Ok(())
-    }
-
-    fn restore_tree(&self, tree_hash: &str, target_dir: &Path) -> anyhow::Result<()> {
-        let entries = tree::parse_tree(&self.store_dir, tree_hash)?;
-
-        for entry in entries {
-            let target_path = target_dir.join(&entry.name);
-
-            if entry.mode.starts_with("040") {
-                fs::create_dir_all(&target_path)?;
-                self.restore_tree(&entry.hash, &target_path)?;
-            } else {
-                let blob = utils::read_object(&self.store_dir, &entry.hash)?;
-
-                if blob.object_type != ObjectType::Blob {
-                    bail!("Expected blob object");
-                }
-
-                fs::write(&target_path, blob.decompressed_content)?;
-            }
+        let trimmed = content.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
         }
-
-        Ok(())
-    }
-
-    fn clear_working_tree(&self) -> anyhow::Result<()> {
-        for entry in fs::read_dir(&self.work_tree)? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if path.file_name().and_then(|n| n.to_str()) == Some(".flux") {
-                continue;
-            }
-
-            if path.is_file() {
-                fs::remove_file(path)?;
-            } else if path.is_dir() {
-                fs::remove_dir_all(path)?;
-            }
-        }
-
-        Ok(())
     }
 
     fn has_uncommitted_changes(&self) -> bool {
@@ -153,15 +105,16 @@ impl Repository {
     }
 
     fn add_file(&mut self, path: &Path) -> anyhow::Result<()> {
-        let res = utils::write_object(&self.store_dir, &self.work_tree, path)?;
+        let blob = Blob::new(&path);
+        self.object_store.store(&blob);
 
         let rel_path = path
-            .strip_prefix(&self.work_tree)
+            .strip_prefix(self.work_tree.path())
             .context("Path is outside work tree")?;
 
         let rel_path = rel_path.to_str().context("Non UTF-8 path")?;
 
-        self.index.add(rel_path.into(), res.hash)?;
+        self.index.add(rel_path.into(), blob.hash())?;
         Ok(())
     }
 
@@ -195,10 +148,10 @@ impl Repository {
     }
 
     pub fn init(path: Option<String>, force: bool) -> anyhow::Result<Self> {
-        let work_tree = path
+        let work_tree_path = path
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
-        let store_dir = work_tree.join(".flux");
+        let store_dir = work_tree_path.join(".flux");
 
         if store_dir.join("config").exists() && !force {
             bail!("Repository already initialized");
@@ -215,7 +168,8 @@ impl Repository {
         let index = Index::empty(&store_dir)?;
 
         let mut repo = Self {
-            work_tree,
+            work_tree: WorkTree::new(work_tree_path),
+            object_store: ObjectStore::new(&store_dir),
             index,
             store_dir,
             config,
@@ -228,10 +182,10 @@ impl Repository {
     }
 
     pub fn open(path: Option<String>) -> anyhow::Result<Self> {
-        let work_tree = path
+        let work_tree_path = path
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
-        let store_dir = work_tree.join(".flux");
+        let store_dir = work_tree_path.join(".flux");
 
         if !store_dir.exists() {
             bail!("Not a repository");
@@ -253,7 +207,8 @@ impl Repository {
         };
 
         let mut repo = Self {
-            work_tree,
+            work_tree: WorkTree::new(work_tree_path),
+            object_store: ObjectStore::load(&store_dir),
             store_dir,
             config,
             index,
@@ -271,40 +226,30 @@ impl Repository {
     }
 
     pub fn hash_object(&self, path: String, write: bool) -> anyhow::Result<String> {
-        let full_path = self.work_tree.join(&path);
-        let hash = if write {
-            let result = write_object(&self.store_dir, &self.work_tree, &full_path)?;
-            result.hash
+        let full_path = self.work_tree.path().join(&path);
+        let metadata = full_path.metadata().expect(&format!(
+            "Could not read metadata for file: {:?}",
+            full_path
+        ));
+        let object: Box<dyn FluxObject>;
+        if metadata.is_file() {
+            object = Box::new(Blob::new(&full_path));
         } else {
-            utils::get_hash(&self.store_dir, &self.work_tree, &full_path)?
-        };
-
-        Ok(hash)
-    }
-
-    pub fn cat_file(&self, object_hash: &str) -> anyhow::Result<()> {
-        let object = utils::read_object(&self.store_dir, object_hash)?;
-
-        match object.object_type {
-            ObjectType::Blob => {
-                let output = String::from_utf8(object.decompressed_content)
-                    .context("Blob contains invalid UTF-8")?;
-                print!("{}", output);
-            }
-            ObjectType::Tree => {
-                self.ls_tree(object_hash)?;
-            }
-            ObjectType::Commit => {
-                commit::show_commit(&self.store_dir, object_hash)?;
-            }
-            _ => bail!("cat_file currently supports only blob objects"),
+            object = Box::new(Tree::new(&full_path));
         }
 
-        Ok(())
+        if write {
+            self.object_store.store(object.as_ref());
+        }
+
+        Ok(object.hash())
     }
 
-    pub fn ls_tree(&self, tree_hash: &str) -> anyhow::Result<String> {
-        Ok(tree::ls_tree(&self.store_dir, tree_hash)?)
+    pub fn cat(&self, object_hash: &str) -> anyhow::Result<()> {
+        let object = self.object_store.retrieve_object(object_hash);
+        object.print();
+
+        Ok(())
     }
 
     pub fn commit_tree(
@@ -312,32 +257,28 @@ impl Repository {
         tree_hash: String,
         message: String,
         parent_hash: Option<String>,
-    ) -> anyhow::Result<String> {
+    ) -> String {
         let (user_name, user_email) = self.config.get();
-        let object = utils::read_object(&self.store_dir, &tree_hash)?;
-        let hash = match object.object_type {
-            ObjectType::Tree => commit::commit_tree(
-                &self.store_dir,
-                user_name,
-                user_email,
-                tree_hash,
-                parent_hash,
-                message,
-            )?,
-            _ => bail!("Can only commit tree objects"),
-        };
-        Ok(hash)
+        let tree = self.object_store.retrieve_object(&tree_hash);
+
+        if tree.object_type() != ObjectType::Tree {
+            panic!("Cannot create a commit from something that is not a tree")
+        }
+
+        let commit = Commit::new(tree.hash(), user_name, user_email, parent_hash, message);
+        self.object_store.store(&commit);
+        commit.hash()
     }
 
     pub fn add(&mut self, path: &str) -> anyhow::Result<()> {
-        let full_path = self.work_tree.join(path);
+        let full_path = self.work_tree.path().join(path);
         self.add_path(&full_path)?;
         self.index.flush()?;
         Ok(())
     }
 
     pub fn delete(&mut self, path: &str) -> anyhow::Result<()> {
-        let path = self.work_tree.join(path);
+        let path = self.work_tree.path().join(path);
         if let Some(s) = path.to_str() {
             self.index.remove(s.into())?;
             self.index.flush()?;
@@ -348,74 +289,39 @@ impl Repository {
         Ok(())
     }
 
-    pub fn tree_from_index(&self) -> anyhow::Result<String> {
-        let mut entries = Vec::new();
-
-        for (path, hash) in &self.index.map {
-            let name = Path::new(path)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .context("Invalid filename in index")?
-                .to_string();
-
-            let object = utils::read_object(&self.store_dir, hash)?;
-
-            let (mode, entry_type) = match object.object_type {
-                ObjectType::Blob => ("100644".to_string(), "blob".to_string()),
-                ObjectType::Tree => ("040000".to_string(), "tree".to_string()),
-                _ => bail!("Unexpected object type in index"),
-            };
-
-            entries.push(TreeEntry {
-                mode,
-                entry_type,
-                hash: hash.clone(),
-                name,
-            });
-        }
-
-        let tree_content = tree::build_tree_content(entries);
-        let result = tree::hash_tree(tree_content)?;
-        utils::store_object(
-            &self.store_dir,
-            &result.object_hash,
-            &result.compressed_content,
-        )?;
-
-        Ok(result.object_hash)
-    }
-
     pub fn commit(&mut self, message: String) -> anyhow::Result<String> {
         if self.index.is_empty() {
             bail!("Nothing to commit");
         }
 
-        let index_tree_hash = self.tree_from_index()?;
-        let (user_name, user_email) = self.config.get();
-        let parent = self.head_commit()?;
+        let tree_hash = self
+            .work_tree
+            .build_tree_from_index(&self.index.map, &self.object_store)?;
 
-        let commit_hash = commit::commit_tree(
-            &self.store_dir,
-            user_name,
-            user_email,
-            index_tree_hash,
-            parent,
-            message,
-        )?;
+        let (user_name, user_email) = self.config.get();
+        let parent = self.head_commit();
+
+        let commit = Commit::new(tree_hash, user_name, user_email, parent, message);
+
+        self.object_store.store(&commit);
 
         let branch_path = self.store_dir.join(&self.head);
-        fs::write(branch_path, &commit_hash)?;
+        fs::write(branch_path, &commit.hash())?;
         self.index.clear()?;
 
-        Ok(commit_hash)
+        Ok(commit.hash())
     }
 
     pub fn log(&self, _reference: Option<String>) -> anyhow::Result<()> {
-        let mut current = self.head_commit()?;
-
-        while let Some(hash) = current {
-            self.cat_file(&hash)?;
-            current = commit::get_parent_hash(&self.store_dir, hash)?;
+        let mut current_hash = self.head_commit();
+        while let Some(hash) = current_hash {
+            self.cat(&hash)?;
+            let current = self.object_store.retrieve_object(&hash);
+            if let Some(commit) = current.as_any().downcast_ref::<Commit>() {
+                current_hash = commit.parent_hash().map(String::from);
+            } else {
+                break;
+            }
         }
 
         Ok(())
@@ -439,10 +345,10 @@ impl Repository {
         )?;
         self.head = branch_ref;
 
-        if let Some(commit_hash) = self.head_commit()? {
-            self.restore_working_tree(&commit_hash)?;
-        } else {
-            self.clear_working_tree()?;
+        self.work_tree.clear()?;
+        if let Some(commit_hash) = self.head_commit() {
+            self.work_tree
+                .restore_from_commit(&commit_hash, &self.object_store)?;
         }
 
         self.load_branches()?;
@@ -459,7 +365,7 @@ impl Repository {
 
         File::create(&branch_head_path)?;
 
-        if let Some(commit_hash) = self.head_commit()? {
+        if let Some(commit_hash) = self.head_commit() {
             fs::write(&branch_head_path, commit_hash)?;
         }
 

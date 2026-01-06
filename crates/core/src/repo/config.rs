@@ -57,13 +57,20 @@ impl Config {
         })
     }
 
-    pub fn set(&self, key: String, value: String) -> anyhow::Result<()> {
+    pub fn set(&mut self, key: String, value: String) -> anyhow::Result<()> {
         let mut file = OpenOptions::new()
             .write(true)
             .append(true)
             .open(&self.path)?;
 
         writeln!(file, r#"{key} = "{value}""#)?;
+
+        match key.as_str() {
+            "user_name" => self.user_name = Some(value),
+            "user_email" => self.user_email = Some(value),
+            _ => {}
+        }
+
         Ok(())
     }
 

@@ -13,13 +13,10 @@ pub struct RepositoryInfo {
 impl RepositoryInfo {
     pub fn from_repo(repo: &Repository) -> Self {
         Self {
-            path: repo.work_tree.to_string_lossy().to_string(),
+            path: repo.work_tree.path().to_string_lossy().to_string(),
             head: repo.head.clone(),
-
             branches: repo.branches.iter().map(BranchInfo::from).collect(),
-
             index: repo.index.map.keys().cloned().collect(),
-
             uncommited: Vec::new(),
         }
     }

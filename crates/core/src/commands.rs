@@ -8,7 +8,7 @@ pub fn set(repo_path: Option<String>, key: String, value: String) -> anyhow::Res
 
 pub fn cat_file(repo_path: Option<String>, hash: String) -> anyhow::Result<()> {
     let repository = Repository::open(repo_path)?;
-    repository.cat_file(&hash)?;
+    repository.cat(&hash)?;
     Ok(())
 }
 
@@ -19,12 +19,6 @@ pub fn hash_object(repo_path: Option<String>, path: String, write: bool) -> anyh
     Ok(hash)
 }
 
-pub fn ls_tree(repo_path: Option<String>, hash: String) -> anyhow::Result<()> {
-    let repository = Repository::open(repo_path)?;
-    repository.ls_tree(&hash)?;
-    Ok(())
-}
-
 pub fn commit_tree(
     repo_path: Option<String>,
     tree_hash: String,
@@ -32,7 +26,7 @@ pub fn commit_tree(
     parent_hash: Option<String>,
 ) -> anyhow::Result<()> {
     let repository = Repository::open(repo_path)?;
-    let hash = repository.commit_tree(tree_hash, message, parent_hash)?;
+    let hash = repository.commit_tree(tree_hash, message, parent_hash);
     println!("{hash}");
     Ok(())
 }
@@ -48,13 +42,6 @@ pub fn remove(repo_path: Option<String>, path: String) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
     repository.delete(&path)?;
     println!("Deleted {path} from index");
-    Ok(())
-}
-
-pub fn write_index(repo_path: Option<String>) -> anyhow::Result<()> {
-    let repository = Repository::open(repo_path)?;
-    let hash = repository.tree_from_index()?;
-    println!("{hash}");
     Ok(())
 }
 

@@ -21,9 +21,6 @@ fn main() -> anyhow::Result<()> {
         Commands::HashObject { path, write } => {
             commands::hash_object(repo_path, path, write)?;
         }
-        Commands::LsTree { tree_hash, .. } => {
-            commands::ls_tree(repo_path, tree_hash)?;
-        }
         Commands::CommitTree {
             tree_hash,
             message,
@@ -36,9 +33,6 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Delete { path } => {
             commands::remove(repo_path, path)?;
-        }
-        Commands::WriteIndex {} => {
-            commands::write_index(repo_path)?;
         }
         Commands::Commit { message } => {
             commands::commit(repo_path, message)?;

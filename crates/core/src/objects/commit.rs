@@ -1,93 +1,115 @@
-use crate::{shared::{self, types::object_type::ObjectType}, utils};
-use anyhow::bail;
+use std::any::Any;
+
+use crate::objects::object_type::FluxObject;
+use crate::utils;
+
+use super::object_type::ObjectType;
 use chrono::Local;
-use std::path::Path;
 
-pub fn commit_tree(
-    store_dir: &Path,
-    user_name: String,
-    user_email: String,
-    tree_hash: String,
+pub struct Commit {
     parent_hash: Option<String>,
-    message: String,
-) -> anyhow::Result<String> {
-    let now = Local::now();
-
-    let parent_line = match parent_hash {
-        Some(h) => format!("parent {}\n", h),
-        None => String::new(),
-    };
-
-    let commit_content = format!(
-        "tree {}\n{}author {} <{}> {} {}\ncommitter {} <{}> {} {}\n\n{}",
-        tree_hash,
-        parent_line,
-        user_name,
-        user_email,
-        now.timestamp(),
-        now.format("%z"),
-        user_name,
-        user_email,
-        now.timestamp(),
-        now.format("%z"),
-        message
-    );
-
-    let size = commit_content.len();
-    let content = format!("commit {}\0{}", size, commit_content);
-    let store: Vec<u8> = content.as_bytes().to_vec();
-
-    let object_hash = utils::hash(&store)?;
-    let compressed_content = utils::compress(&store)?;
-    utils::store_object(store_dir, &object_hash, &compressed_content)?;
-
-    Ok(object_hash)
+    pub tree_hash: String,
+    pub content: Vec<u8>,
 }
 
-pub fn show_commit(store_dir: &Path, commit_hash: &str) -> anyhow::Result<()> {
-    let commit = utils::read_object(store_dir, &commit_hash)?;
-    println!("{}\n\n", String::from_utf8(commit.decompressed_content)?);
-    Ok(())
+impl Commit {
+    pub fn new(
+        tree_hash: String,
+        user_name: String,
+        user_email: String,
+        parent_hash: Option<String>,
+        message: String,
+    ) -> Self {
+        let now = Local::now();
+        let parent_line = match parent_hash {
+            Some(ref h) => format!("parent {}\n", h),
+            None => String::new(),
+        };
+        let content = format!(
+            "tree {}\n{}author {} <{}> {} {}\ncommitter {} <{}> {} {}\n\n{}",
+            tree_hash,
+            parent_line,
+            user_name,
+            user_email,
+            now.timestamp(),
+            now.format("%z"),
+            user_name,
+            user_email,
+            now.timestamp(),
+            now.format("%z"),
+            message
+        )
+        .as_bytes()
+        .to_owned();
+        
+        Self {
+            content,
+            parent_hash,
+            tree_hash: tree_hash,
+        }
+    }
+    
+    pub fn from_content(content: Vec<u8>) -> Self {
+        let content_str = String::from_utf8_lossy(&content);
+        
+        let mut tree_hash = String::new();
+        let mut parent_hash = None;
+        
+        for line in content_str.lines() {
+            if line.starts_with("tree ") {
+                tree_hash = line.strip_prefix("tree ").unwrap_or("").to_string();
+            } else if line.starts_with("parent ") {
+                parent_hash = Some(line.strip_prefix("parent ").unwrap_or("").to_string());
+            }
+        }
+        
+        Self {
+            content,
+            parent_hash,
+            tree_hash,
+        }
+    }
+    
+    pub fn to_string(&self) -> String {
+        String::from_utf8(self.content.clone())
+            .expect("Could not convert commit content to string")
+    }
+    
+    pub fn parent_hash(&self) -> Option<&str> {
+        self.parent_hash.as_deref()
+    }
 }
 
-pub fn get_parent_hash(store_dir: &Path, commit_hash: String) -> anyhow::Result<Option<String>> {
-    let commit = utils::read_object(store_dir, &commit_hash)?;
-
-    match commit.object_type {
-        ObjectType::Commit => {},
-        _ => bail!("Parent of a commit must be itself a commit")
-    };
-
-    let content = String::from_utf8(commit.decompressed_content)?;
-    for line in content.lines() {
-        if let Some(rest) = line.strip_prefix("parent ") {
-            return Ok(Some(rest.trim().to_string()));
-        }
-
-        if line.is_empty() {
-            break;
-        }
+impl FluxObject for Commit {
+    fn object_type(&self) -> ObjectType {
+        ObjectType::Commit
+    }
+    
+    fn hash(&self) -> String {
+        let header = format!("commit {}\0", self.content.len());
+        let mut full = Vec::new();
+        full.extend_from_slice(header.as_bytes());
+        full.extend_from_slice(&self.content);
+        utils::hash(&full)
+    }
+    
+    fn serialize(&self) -> Vec<u8> {
+        let header = format!("commit {}\0", self.content.len());
+        let mut full = Vec::new();
+        full.extend_from_slice(header.as_bytes());
+        full.extend_from_slice(&self.content);
+        utils::compress(&full)
+    }
+    
+    fn print(&self) {
+        println!("{}", self.to_string())
     }
 
-    Ok(None)
-}
-
-pub fn get_tree_hash(commit_obj: shared::types::generic_object::GenericObject) -> anyhow::Result<Option<String>> {
-    if commit_obj.object_type != ObjectType::Commit {
-        bail!("Expected commit object");
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 
-    let content = String::from_utf8(commit_obj.decompressed_content)?;
-
-    for line in content.lines() {
-        if let Some(rest) = line.strip_prefix("tree ") {
-            return Ok(Some(rest.trim().to_string()));
-        }
-
-        if line.is_empty() {
-            break;
-        }
+    fn content(&self) -> Vec<u8> {
+        self.content.clone()
     }
-
-    Ok(None)
 }

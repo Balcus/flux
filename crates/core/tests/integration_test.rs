@@ -1,4 +1,4 @@
-use flux_core::{commands, repo::repository::Repository, utils};
+use flux_core::{commands, repo::repository::Repository};
 use serial_test::serial;
 use std::fs;
 
@@ -66,7 +66,6 @@ fn hash_object_test() {
 
     Repository::init(None, false).unwrap();
 
-    // file hashing
     let my_hash = commands::hash_object(None, "README.md".to_string(), false).unwrap();
     let git_hash = common::git_hash_object("README.md").unwrap();
     assert_eq!(my_hash, git_hash);
@@ -78,7 +77,6 @@ fn hash_object_test() {
     let _ = commands::hash_object(None, "README.md".to_string(), true).unwrap();
     assert!(object_path.exists());
 
-    // dir hashing (git does not support hashing directories directly)
     assert!(project_path.join("src").exists());
     let my_hash = commands::hash_object(None, "src".to_string(), true).unwrap();
     assert_eq!(my_hash, "ac715a76cc52acc719def812525f6ae57b4770a9");
@@ -90,47 +88,63 @@ fn commit_test() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
-    // create repo and set user data
-    Repository::init(None, false).unwrap();
-    commands::set(None, "user_name".to_string(), "Test User".to_string()).unwrap();
-    commands::set(None, "user_email".to_string(), "test@example.com".to_string()).unwrap();
+    let mut repo = Repository::init(None, false).unwrap();
+    repo.set("user_name".to_string(), "Test User".to_string())
+        .expect("Failed to set user name");
+    repo.set("user_email".to_string(), "test@example.com".to_string())
+        .expect("Failed to set user email");
 
-    // check if README is correctly added to the index
-    let readme_blob_hash = commands::hash_object(None, "README.md".to_string(), false).unwrap();
+    let readme_blob_hash = repo
+        .hash_object("./README.md".to_string(), false)
+        .expect("Failed hash-object for file README.md");
     let readme_object_path = project_path
         .join(".flux/objects")
         .join(&readme_blob_hash[..2])
         .join(&readme_blob_hash[2..]);
     assert!(!readme_object_path.exists());
 
-    commands::add(None, "README.md".to_string()).unwrap();
-
-    let index = fs::read_to_string(".flux/index").unwrap();
-    assert!(index.contains(&format!("\"./README.md\":\"{}\"", readme_blob_hash)));
+    repo.add("./README.md")
+        .expect("Failed to add README to index");
+    assert!(
+        repo.index
+            .map
+            .get("README.md")
+            .expect("Failed to find README inside index")
+            == &readme_blob_hash
+    );
     assert!(readme_object_path.exists());
 
-    // check if main and lib are correctly added to index
-    commands::add(None, "src/main.rs".to_string()).unwrap();
-    commands::add(None, "src/lib.rs".to_string()).unwrap();
-
-    let index = fs::read_to_string(".flux/index").unwrap();
-    let main_blob_hash = commands::hash_object(None, "src/main.rs".to_string(), false).unwrap();
-    let lib_blob_hash = commands::hash_object(None, "src/lib.rs".to_string(), false).unwrap();
-
-    assert!(index.contains(&format!("\"./src/main.rs\":\"{}\"", main_blob_hash)));
-    assert!(index.contains(&format!("\"./src/lib.rs\":\"{}\"", lib_blob_hash)));
+    repo.add("./src").expect("Failed to add src to index");
+    let main_hash = repo
+        .hash_object("./src/main.rs".to_string(), false)
+        .expect("Failed to hash src/main.rs");
+    let lib_hash = repo
+        .hash_object("./src/lib.rs".to_string(), false)
+        .expect("Failed to hash src/lib.rs");
+    assert!(
+        repo.index
+            .map
+            .get("src/main.rs")
+            .expect("Failed to find src/main.rs inside index")
+            == &main_hash
+    );
+    assert!(
+        repo.index
+            .map
+            .get("src/lib.rs")
+            .expect("Failed to find src/lib.rs inside index")
+            == &lib_hash
+    );
 
     let main_object_path = project_path
         .join(".flux/objects")
-        .join(&main_blob_hash[..2])
-        .join(&main_blob_hash[2..]);
+        .join(&main_hash[..2])
+        .join(&main_hash[2..]);
     assert!(main_object_path.exists());
 
-    // check if commit is created correctly
-    let commit_hash = commands::commit(None, "Initial commit".to_string()).unwrap();
-
-    assert_eq!(commit_hash.len(), 40);
-
+    let commit_hash = repo
+        .commit("Initial commit".to_string())
+        .expect("Failed to create inital commit");
     let commit_object_path = project_path
         .join(".flux/objects")
         .join(&commit_hash[..2])
@@ -143,9 +157,9 @@ fn commit_test() {
     let main_ref = fs::read_to_string(".flux/refs/heads/main").unwrap();
     assert_eq!(main_ref.trim(), commit_hash);
 
-    let repo = Repository::open(None).unwrap();
-    let commit_data = utils::read_object(&repo.store_dir, &commit_hash).unwrap();
-    let commit_content = String::from_utf8(commit_data.decompressed_content).unwrap();
+    let commit_content =
+        String::from_utf8(repo.object_store.retrieve_object(&commit_hash).content())
+            .expect("Failed to read commit content");
 
     assert!(commit_content.starts_with("tree "));
     assert!(commit_content.contains("author Test User <test@example.com>"));
@@ -162,20 +176,84 @@ fn commit_test() {
         .join(&tree_hash[2..]);
     assert!(tree_object_path.exists());
 
-    // update README, create second commit and check if parent is set right
     fs::write("README.md", "Updated content for second commit").unwrap();
-    commands::add(None, "README.md".to_string()).unwrap();
-
-    let second_commit_hash = commands::commit(None, "Second commit".to_string()).unwrap();
-
+    repo.add("./README.md")
+        .expect("Failed to add README.md to index");
+    let second_commit_hash = repo
+        .commit("Second commit".to_string())
+        .expect("Failed to create second commit");
     assert_ne!(commit_hash, second_commit_hash);
 
-    let main_ref = fs::read_to_string(".flux/refs/heads/main").unwrap();
+    let main_ref = fs::read_to_string(".flux/refs/heads/main").expect("Failed to read HEAD");
     assert_eq!(main_ref.trim(), second_commit_hash);
 
-    let second_commit_data = utils::read_object(&repo.store_dir, &second_commit_hash).unwrap();
-    let second_commit_content = String::from_utf8(second_commit_data.decompressed_content).unwrap();
+    let second_commit_content = String::from_utf8(
+        repo.object_store
+            .retrieve_object(&second_commit_hash)
+            .content(),
+    )
+    .expect("Failed to read second commit content to string");
 
     assert!(second_commit_content.contains(&format!("parent {}", commit_hash)));
     assert!(second_commit_content.contains("Second commit"));
+}
+
+#[test]
+#[serial]
+fn branching_test() {
+    let (_temp, project_path) = common::setup_test_project();
+    let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
+
+    let mut repo = Repository::init(None, false).expect("Failed to initalize flux repository");
+    repo.set(String::from("user_name"), String::from("test"))
+        .expect("Failed to set user name");
+    repo.set(String::from("user_email"), String::from("test@gmail.com"))
+        .expect("Failed to set user email");
+
+    repo.add(".").expect("Failed to add changes to index");
+    let first_commit_hash = repo
+        .commit(String::from("First commit on branch main"))
+        .unwrap();
+
+    assert_eq!(repo.head, "refs/heads/main");
+    assert_eq!(
+        &repo
+            .branch_name()
+            .expect("Could not read current branch name"),
+        "main"
+    );
+    let head_content =
+        fs::read_to_string(&repo.store_dir.join(&repo.head)).expect("Could not read HEAD content");
+    assert_eq!(head_content, first_commit_hash);
+
+    repo.new_branch("feature")
+        .expect("Failed to create new branch named feature");
+    assert!(fs::exists(&repo.store_dir.join("refs/heads/feature")).unwrap());
+    let feature_content = fs::read_to_string(&repo.store_dir.join("refs/heads/feature")).unwrap();
+    assert_eq!(feature_content, head_content);
+
+    assert!(fs::exists(repo.work_tree.path().join("README.md")).unwrap());
+    assert!(fs::exists(repo.work_tree.path().join("src/main.rs")).unwrap());
+    assert!(fs::exists(repo.work_tree.path().join("src/lib.rs")).unwrap());
+
+    repo.switch_branch("main", false).expect("Failed to switch from feature branch back to main");
+    assert!(fs::exists(repo.work_tree.path().join("README.md")).unwrap());
+    assert!(fs::exists(repo.work_tree.path().join("src/main.rs")).unwrap());
+    assert!(fs::exists(repo.work_tree.path().join("src/lib.rs")).unwrap());
+
+    fs::write("README.md", "Added something new to README").unwrap();
+    repo.add(".").expect("Failed to add changes to index");
+    let second_commit_hash = repo
+        .commit("Second commit on main branch".to_string())
+        .expect("Failed to create the second commit on branch main");
+
+    let main_head = fs::read_to_string(&repo.store_dir.join("refs/heads/main")).unwrap();
+    assert_eq!(second_commit_hash, main_head);
+    assert_eq!(second_commit_hash, repo.head_commit().expect("Failed to read the commit HEAD points to"));
+
+    repo.switch_branch("feature", false).expect("Failed to switch to feature branch");
+    assert_eq!(repo.branch_name().expect("Failed to read current branch name"), "feature");
+    assert_eq!(first_commit_hash, repo.head_commit().expect("Failed to read the commit HEAD points to"));
+    assert!(fs::read_to_string("./README.md").unwrap().contains("Read this file before running the project"));
+    assert!(!fs::read_to_string("./README.md").unwrap().contains("Added something new to README"));
 }
