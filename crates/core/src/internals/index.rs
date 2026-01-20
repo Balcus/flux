@@ -7,16 +7,17 @@ use std::{
 use anyhow::{Context, Ok};
 use json::JsonValue;
 
+// TODO: i think the flush should be also after the add and delete operations as currently they probably are insdie repo
 pub struct Index {
     pub map: HashMap<String, String>,
     path: PathBuf,
 }
 
 impl Index {
-    pub fn empty(store_dir: &Path) -> anyhow::Result<Self> {
+    pub fn new(flux_dir: &Path) -> anyhow::Result<Self> {
         let empty_obj = JsonValue::new_object();
         let json_str = empty_obj.dump();
-        let path = store_dir.join("index");
+        let path = flux_dir.join("index");
         fs::write(&path, json_str)?;
         Ok(Index {
             map: HashMap::new(),

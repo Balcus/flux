@@ -1,4 +1,4 @@
-use crate::repo::{branch::Branch, repository::Repository};
+use crate::internals::repository::Repository;
 
 pub fn set(repo_path: Option<String>, key: String, value: String) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
@@ -58,12 +58,6 @@ pub fn log(repo_path: Option<String>) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn split(repo_path: Option<String>, name: String) -> anyhow::Result<()> {
-    let mut repository = Repository::open(repo_path)?;
-    repository.new_branch(&name)?;
-    Ok(())
-}
-
 pub fn show_branches(repo_path: Option<String>) -> anyhow::Result<()> {
     let repository = Repository::open(repo_path)?;
     let output = repository.show_branches()?;
@@ -73,7 +67,7 @@ pub fn show_branches(repo_path: Option<String>) -> anyhow::Result<()> {
 
 pub fn create_branch(repo_path: Option<String>, name: String) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
-    repository.new_branch(&name)?;
+    repository.new_branch(&name);
     Ok(())
 }
 
@@ -83,11 +77,6 @@ pub fn delete_branch(_repo_path: Option<String>, _name: String) -> anyhow::Resul
 
 pub fn switch_branch(repo_path: Option<String>, name: String, force: bool) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
-    repository.switch_branch(&name, force)?;
+    repository.switch_branch(&name, force);
     Ok(())
-}
-
-pub fn get_branches(repo_path: Option<String>) -> anyhow::Result<Vec<Branch>> {
-    let repository = Repository::open(repo_path)?;
-    Ok(repository.branches)
 }

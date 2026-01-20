@@ -4,7 +4,12 @@ use std::{
 };
 
 use crate::{
-    objects::{blob::Blob, commit::Commit, object_type::{FluxObject, ObjectType}, tree::Tree},
+    objects::{
+        blob::Blob,
+        commit::Commit,
+        object_type::{FluxObject, ObjectType},
+        tree::Tree,
+    },
     utils,
 };
 
@@ -15,7 +20,7 @@ pub struct ObjectStore {
 impl ObjectStore {
     pub fn new(flux_dir: &Path) -> Self {
         let path = flux_dir.join("objects");
-        fs::create_dir_all(&path).expect("Could not create directories");
+        fs::create_dir(&path).expect("Failed to create object storage directory");
         Self { path }
     }
 
@@ -35,7 +40,7 @@ impl ObjectStore {
             ObjectType::Blob => Box::new(Blob::from_content(object.decompressed_content)),
             ObjectType::Tree => Box::new(Tree::from_content(object.decompressed_content)),
             ObjectType::Commit => Box::new(Commit::from_content(object.decompressed_content)),
-            ObjectType::Tag => panic!("Currently not supported")
+            ObjectType::Tag => panic!("Currently not supported"),
         }
     }
 }

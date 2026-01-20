@@ -2,7 +2,7 @@ use crate::objects::blob::Blob;
 use crate::objects::commit::Commit;
 use crate::objects::object_type::FluxObject;
 use crate::objects::tree::{Tree, TreeEntry};
-use crate::repo::object_store::ObjectStore;
+use crate::internals::object_store::ObjectStore;
 use anyhow::Context;
 use std::collections::HashMap;
 use std::fs;

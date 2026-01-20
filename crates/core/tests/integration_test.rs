@@ -1,4 +1,4 @@
-use flux_core::{commands, repo::repository::Repository};
+use flux_core::{commands, internals::repository::Repository};
 use serial_test::serial;
 use std::fs;
 
@@ -29,7 +29,7 @@ fn init_test() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
-    Repository::init(None, false).unwrap();
+    let repo = Repository::init(None, false).unwrap();
 
     assert!(project_path.join(".flux/config").exists());
     assert!(project_path.join(".flux/HEAD").exists());
@@ -38,6 +38,7 @@ fn init_test() {
 
     let head = fs::read_to_string(".flux/HEAD").unwrap();
     assert_eq!(head, "ref: refs/heads/main\n");
+    assert_eq!(repo.refs.head_ref().unwrap(), "refs/heads/main");
 }
 
 #[test]
@@ -215,28 +216,28 @@ fn branching_test() {
         .commit(String::from("First commit on branch main"))
         .unwrap();
 
-    assert_eq!(repo.head, "refs/heads/main");
+    assert_eq!(repo.refs.head_ref().unwrap(), "refs/heads/main");
     assert_eq!(
         &repo
-            .branch_name()
+            .refs
+            .current_branch()
             .expect("Could not read current branch name"),
         "main"
     );
     let head_content =
-        fs::read_to_string(&repo.store_dir.join(&repo.head)).expect("Could not read HEAD content");
+        fs::read_to_string(&repo.flux_dir.join(&repo.refs.head_ref().unwrap())).expect("Could not read HEAD content");
     assert_eq!(head_content, first_commit_hash);
 
-    repo.new_branch("feature")
-        .expect("Failed to create new branch named feature");
-    assert!(fs::exists(&repo.store_dir.join("refs/heads/feature")).unwrap());
-    let feature_content = fs::read_to_string(&repo.store_dir.join("refs/heads/feature")).unwrap();
+    repo.new_branch("feature");
+    assert!(fs::exists(&repo.flux_dir.join("refs/heads/feature")).unwrap());
+    let feature_content = fs::read_to_string(&repo.flux_dir.join("refs/heads/feature")).unwrap();
     assert_eq!(feature_content, head_content);
 
     assert!(fs::exists(repo.work_tree.path().join("README.md")).unwrap());
     assert!(fs::exists(repo.work_tree.path().join("src/main.rs")).unwrap());
     assert!(fs::exists(repo.work_tree.path().join("src/lib.rs")).unwrap());
 
-    repo.switch_branch("main", false).expect("Failed to switch from feature branch back to main");
+    repo.switch_branch("main", false);
     assert!(fs::exists(repo.work_tree.path().join("README.md")).unwrap());
     assert!(fs::exists(repo.work_tree.path().join("src/main.rs")).unwrap());
     assert!(fs::exists(repo.work_tree.path().join("src/lib.rs")).unwrap());
@@ -247,13 +248,13 @@ fn branching_test() {
         .commit("Second commit on main branch".to_string())
         .expect("Failed to create the second commit on branch main");
 
-    let main_head = fs::read_to_string(&repo.store_dir.join("refs/heads/main")).unwrap();
+    let main_head = fs::read_to_string(&repo.flux_dir.join("refs/heads/main")).unwrap();
     assert_eq!(second_commit_hash, main_head);
-    assert_eq!(second_commit_hash, repo.head_commit().expect("Failed to read the commit HEAD points to"));
+    assert_eq!(second_commit_hash, repo.refs.head_commit().expect("Failed to read the commit HEAD points to"));
 
-    repo.switch_branch("feature", false).expect("Failed to switch to feature branch");
-    assert_eq!(repo.branch_name().expect("Failed to read current branch name"), "feature");
-    assert_eq!(first_commit_hash, repo.head_commit().expect("Failed to read the commit HEAD points to"));
+    repo.switch_branch("feature", false);
+    assert_eq!(repo.refs.current_branch().expect("Failed to read current branch name"), "feature");
+    assert_eq!(first_commit_hash, repo.refs.head_commit().expect("Failed to read the commit HEAD points to"));
     assert!(fs::read_to_string("./README.md").unwrap().contains("Read this file before running the project"));
     assert!(!fs::read_to_string("./README.md").unwrap().contains("Added something new to README"));
 }

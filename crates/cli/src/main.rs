@@ -1,6 +1,6 @@
 use crate::cli::{BranchCommands, Cli, Commands};
 use clap::Parser;
-use flux_core::{commands, repo::repository::Repository};
+use flux_core::{commands, internals::repository::Repository};
 
 pub mod cli;
 
