@@ -1,9 +1,9 @@
+use crate::error;
+use crate::internals::object_store::ObjectStore;
 use crate::objects::blob::Blob;
 use crate::objects::commit::Commit;
 use crate::objects::object_type::FluxObject;
 use crate::objects::tree::{Tree, TreeEntry};
-use crate::internals::object_store::ObjectStore;
-use anyhow::Context;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -23,19 +23,38 @@ impl WorkTree {
         Self { path: project_path }
     }
 
-    pub fn clear(&self) -> anyhow::Result<()> {
-        for entry in fs::read_dir(&self.path)? {
-            let entry = entry?;
-            let path = entry.path();
+    pub fn clear(&self) -> Result<(), error::WorkTreeError> {
+        let iter = fs::read_dir(&self.path).map_err(|e| error::IoError::Read {
+            path: self.path.clone(),
+            source: e,
+        })?;
 
+        for entry in iter {
+            let entry = entry.map_err(|e| error::IoError::Read {
+                path: self.path.clone(),
+                source: e,
+            })?;
+
+            let path = entry.path();
             if path.file_name().and_then(|n| n.to_str()) == Some(".flux") {
                 continue;
             }
 
-            if path.is_file() {
-                fs::remove_file(path)?;
-            } else if path.is_dir() {
-                fs::remove_dir_all(path)?;
+            let ft = entry.file_type().map_err(|e| error::IoError::Read {
+                path: path.clone(),
+                source: e,
+            })?;
+
+            if ft.is_file() || ft.is_symlink() {
+                fs::remove_file(&path).map_err(|e| error::IoError::Delete {
+                    path: path.clone(),
+                    source: e,
+                })?;
+            } else if ft.is_dir() {
+                fs::remove_dir_all(&path).map_err(|e| error::IoError::Delete {
+                    path: path.clone(),
+                    source: e,
+                })?;
             }
         }
 
@@ -46,12 +65,12 @@ impl WorkTree {
         &self,
         commit_hash: &str,
         object_store: &ObjectStore,
-    ) -> anyhow::Result<()> {
-        let commit_obj = object_store.retrieve_object(commit_hash);
+    ) -> Result<(), error::WorkTreeError> {
+        let commit_obj = object_store.retrieve_object(commit_hash)?;
         let commit = commit_obj
             .as_any()
             .downcast_ref::<Commit>()
-            .context("Expected commit object")?;
+            .ok_or_else(|| error::WorkTreeError::Downcast { expected: "commit" })?;
         let tree_hash = &commit.tree_hash;
         self.restore_tree(tree_hash, &self.path, object_store)?;
 
@@ -63,13 +82,13 @@ impl WorkTree {
         tree_hash: &str,
         target_dir: &Path,
         object_store: &ObjectStore,
-    ) -> anyhow::Result<()> {
-        let tree_obj = object_store.retrieve_object(tree_hash);
+    ) -> Result<(), error::WorkTreeError> {
+        let tree_obj = object_store.retrieve_object(tree_hash)?;
 
         let tree = tree_obj
             .as_any()
             .downcast_ref::<Tree>()
-            .context(format!("Object {} is not a tree", tree_hash))?;
+            .ok_or_else(|| error::WorkTreeError::Downcast { expected: "tree" })?;
 
         let entries = tree.entries();
 
@@ -77,18 +96,26 @@ impl WorkTree {
             let target_path = target_dir.join(&entry.name);
 
             if entry.mode.starts_with("040") {
-                fs::create_dir_all(&target_path)?;
+                fs::create_dir_all(&target_path).map_err(|e| error::IoError::Create {
+                    path: target_path.clone(),
+                    source: e,
+                })?;
                 self.restore_tree(&entry.hash, &target_path, object_store)?;
             } else {
-                let blob_obj = object_store.retrieve_object(&entry.hash);
+                let blob_obj = object_store.retrieve_object(&entry.hash)?;
 
                 let blob = blob_obj
                     .as_any()
                     .downcast_ref::<Blob>()
-                    .context(format!("Object {} is not a blob", entry.hash))?;
+                    .ok_or_else(|| error::WorkTreeError::Downcast { expected: "blob" })?;
 
                 let blob_content = blob.to_string();
-                fs::write(&target_path, blob_content.as_bytes())?;
+                fs::write(&target_path, blob_content.as_bytes()).map_err(|e| {
+                    error::IoError::Write {
+                        path: target_path.clone(),
+                        source: e,
+                    }
+                })?;
             }
         }
 
@@ -99,9 +126,10 @@ impl WorkTree {
         &self,
         index: &HashMap<String, String>,
         object_store: &ObjectStore,
-    ) -> anyhow::Result<String> {
+    ) -> Result<String, error::WorkTreeError> {
         let root = self.build_tree_structure(index);
-        self.create_tree_object(&root, object_store)
+        let hash = self.create_tree_object(&root, object_store)?;
+        Ok(hash)
     }
 
     fn build_tree_structure(&self, index: &HashMap<String, String>) -> TreeNode {
@@ -133,7 +161,7 @@ impl WorkTree {
         &self,
         node: &TreeNode,
         object_store: &ObjectStore,
-    ) -> anyhow::Result<String> {
+    ) -> Result<String, error::WorkTreeError> {
         match node {
             TreeNode::File(hash) => Ok(hash.clone()),
             TreeNode::Dir(map) => {
@@ -174,14 +202,19 @@ impl WorkTree {
 
                 let mut tree_content = Vec::new();
                 for entry in entries {
-                    let hash_bytes = hex::decode(&entry.hash).context("Invalid object hash")?;
+                    let hash_bytes = hex::decode(&entry.hash).map_err(|e| {
+                        error::WorkTreeError::InvalidHash {
+                            hash: entry.hash,
+                            source: e,
+                        }
+                    })?;
                     let entry_header = format!("{} {}\0", entry.mode, entry.name);
                     tree_content.extend_from_slice(entry_header.as_bytes());
                     tree_content.extend_from_slice(&hash_bytes);
                 }
 
                 let tree = Tree::from_content(tree_content);
-                object_store.store(&tree);
+                object_store.store(&tree)?;
 
                 Ok(tree.hash())
             }

@@ -1,12 +1,11 @@
-use crate::error::{self, IoOperation};
+use crate::error;
+use json::JsonValue;
 use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
 };
-use json::JsonValue;
 
-// TODO: i think the flush should be also after the add and delete operations as currently they probably are insdie repo
 #[derive(Debug)]
 pub struct Index {
     pub map: HashMap<String, String>,
@@ -14,12 +13,14 @@ pub struct Index {
 }
 
 impl Index {
-    pub fn new(flux_dir: &Path) -> Result<Self, error::IoError> {
+    pub fn new(flux_dir: &Path) -> Result<Self, error::IndexError> {
         let json_str = JsonValue::new_object().dump();
         let path = flux_dir.join("index");
 
-        fs::write(&path, json_str)
-            .map_err(|e| error::IoError::new(IoOperation::Write, path.clone(), e))?;
+        fs::write(&path, json_str).map_err(|e| error::IoError::Write {
+            path: path.clone(),
+            source: e,
+        })?;
 
         Ok(Index {
             map: HashMap::new(),
@@ -27,11 +28,17 @@ impl Index {
         })
     }
 
-    pub fn load(store_dir: &Path) -> Result<Self, error::FluxError> {
+    pub fn load(store_dir: &Path) -> Result<Self, error::IndexError> {
         let path = store_dir.join("index");
 
-        let content = fs::read_to_string(&path)
-            .map_err(|e| error::IoError::new(IoOperation::Read, path.clone(), e))?;
+        if !path.exists() {
+            return Err(error::IoError::Missing { path: path.clone() }.into());
+        }
+
+        let content = fs::read_to_string(&path).map_err(|e| error::IoError::Read {
+            path: path.clone(),
+            source: e,
+        })?;
 
         let json_obj =
             json::parse(&content).map_err(|e| error::ParseError::new(path.clone(), e))?;
@@ -47,29 +54,30 @@ impl Index {
         Ok(Index { map, path })
     }
 
-    pub fn flush(&self) -> anyhow::Result<()> {
+    pub fn flush(&self) -> Result<(), error::IndexError> {
         let mut json_obj = JsonValue::new_object();
         for (key, value) in &self.map {
             json_obj[key] = value.clone().into();
         }
-        std::fs::write(&self.path, json_obj.dump())?;
-
+        std::fs::write(&self.path, json_obj.dump()).map_err(|e| error::IoError::Write {
+            path: self.path.clone(),
+            source: e,
+        })?;
         Ok(())
     }
 
-    pub fn add(&mut self, path: String, hash: String) -> anyhow::Result<()> {
+    pub fn add(&mut self, path: String, hash: String) -> Result<(), error::IndexError> {
         self.map.insert(path, hash);
-
-        Ok(())
+        self.flush()
     }
 
-    pub fn remove(&mut self, path: String) -> anyhow::Result<()> {
-        self.map.remove(&path);
-
-        Ok(())
+    pub fn remove(&mut self, path: &str) -> Result<bool, error::IndexError> {
+        let res = self.map.remove(path);
+        self.flush()?;
+        Ok(res.is_some())
     }
 
-    pub fn clear(&mut self) -> anyhow::Result<()> {
+    pub fn clear(&mut self) -> Result<(), error::IndexError> {
         self.map.clear();
         self.flush()
     }
@@ -87,25 +95,42 @@ mod tests {
 
     #[test]
     fn init_fail() {
-        let dir = tempdir().expect("Failed to create temp dir");
+        let dir = tempdir().unwrap();
         let file_path = dir.path().join("not_a_dir");
-        File::create(&file_path).expect("Failed to create file");
+        File::create(&file_path).unwrap();
 
-        // call new method with file instead of dir, should throw io exception
         let result = Index::new(&file_path);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert_eq!(err.operation, IoOperation::Write);
+        assert!(matches!(err, error::IndexError::Io(error::IoError::Write { .. })));
+
+        println!("{err}")
     }
 
     #[test]
-    // continue test-case
     fn load_fail() {
         let dir = tempdir().unwrap();
-        fs::create_dir(".flux").unwrap();
-        let result = Index::load(dir.path());
-        assert!(result.is_err());
-        // let err = result.unwrap_err();
-        // File::create(".flux/index").unwrap();
+        let flux_dir = dir.path().join(".flux");
+        if flux_dir.exists() {
+            fs::remove_dir(&flux_dir).unwrap();
+        }
+        fs::create_dir(&flux_dir).unwrap();
+
+        let res = Index::load(&flux_dir);
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(matches!(err, error::IndexError::Io(error::IoError::Missing { .. })));
+
+        println!("{err}");
+
+        File::create(flux_dir.join("index")).unwrap();
+        fs::write(flux_dir.join("index"), "{").unwrap();
+
+        let res = Index::load(&flux_dir);
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert!(matches!(err, error::IndexError::Parse(..)));
+
+        println!("{err}");
     }
 }

@@ -26,8 +26,7 @@ pub fn commit_tree(
     parent_hash: Option<String>,
 ) -> anyhow::Result<()> {
     let repository = Repository::open(repo_path)?;
-    let hash = repository.commit_tree(tree_hash, message, parent_hash);
-    println!("{hash}");
+    repository.commit_tree(tree_hash, message, parent_hash)?;
     Ok(())
 }
 

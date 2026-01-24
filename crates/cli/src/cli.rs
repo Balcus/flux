@@ -36,7 +36,7 @@ pub enum BranchCommands {
         #[arg(value_name = "branch-name")]
         name: String,
 
-        #[arg(short = 'f', long = "force")]
+        #[arg(short = 'f', long = "force", default_value_t = false)]
         /// Force the branch switch even if there are uncommitted changes
         force: bool,
     },
@@ -51,6 +51,10 @@ pub enum Commands {
     Init {
         /// Target directory for the repository
         path: Option<String>,
+
+        #[arg(short = 'f', long = "force", default_value_t = false)]
+        // If enabled will delete the previous .flux directory and will create a new one
+        force: bool
     },
 
     /// Set a configuration value
@@ -66,6 +70,7 @@ pub enum Commands {
         #[arg(short = 'p')]
         pretty_print: bool,
 
+        #[arg(short = 'f', long = "force")]
         object_hash: String,
     },
 

@@ -1,4 +1,4 @@
-use std::any::Any;
+use std::{any::Any, fmt};
 
 pub trait FluxObject {
     fn object_type(&self) -> ObjectType;
@@ -24,6 +24,17 @@ impl ObjectType {
             Self::Tree => "tree",
             Self::Commit => "commit",
             Self::Tag => "tag"
+        }
+    }
+}
+
+impl fmt::Display for ObjectType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ObjectType::Blob => write!(f, "Blob"),
+            ObjectType::Tree => write!(f, "Tree"),
+            ObjectType::Commit => write!(f, "Commit"),
+            ObjectType::Tag => write!(f, "Tag"),
         }
     }
 }

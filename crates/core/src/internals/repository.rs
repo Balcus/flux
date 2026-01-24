@@ -1,3 +1,4 @@
+use crate::error;
 use crate::internals::config::Config;
 use crate::internals::index::Index;
 use crate::internals::object_store::ObjectStore;
@@ -12,8 +13,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 // TODO:
-// - finish refactoring
-// - standardized error handling
+// - standardized error handling + tests
 // - cleanup cli commands and make them simpler
 // - diff feature
 
@@ -55,33 +55,66 @@ impl Repository {
 
     fn add_file(&mut self, path: &Path) -> anyhow::Result<()> {
         let blob = Blob::new(&path);
-        self.object_store.store(&blob);
+        self.object_store.store(&blob).map_err(|e| {
+            error::RepositoryError::with_context(
+                "failed adding file to index, could not store object",
+                e,
+            )
+        })?;
 
-        let rel_path = path
-            .strip_prefix(self.work_tree.path())
-            .context("Path is outside work tree")?;
+        let rel_path = path.strip_prefix(self.work_tree.path()).with_context(|| {
+            format!(
+                "add: '{}' is outside work tree '{}'",
+                path.display(),
+                self.work_tree.path().display(),
+            )
+        })?;
 
-        let rel_path = rel_path.to_str().context("Non UTF-8 path")?;
+        let rel_str = rel_path
+            .to_str()
+            .with_context(|| format!("add command failed for non UTF8 path: '{:?}'", rel_path))?;
 
-        self.index.add(rel_path.into(), blob.hash())?;
+        self.index
+            .add(rel_str.to_owned(), blob.hash())
+            .with_context(|| format!("add command failed to update index for: '{}'", rel_str))?;
+
         Ok(())
     }
 
-    pub fn init(path: Option<String>, force: bool) -> anyhow::Result<Self> {
+    pub fn init(path: Option<String>, force: bool) -> Result<Self, error::RepositoryError> {
         let work_tree_path = path
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
         let flux_dir = work_tree_path.join(".flux");
 
-        if flux_dir.join("config").exists() && !force {
-            bail!("Repository already initialized");
+        if flux_dir.exists() && force {
+            fs::remove_dir_all(&flux_dir).map_err(|e| {
+                error::RepositoryError::with_context("failed to force reinitialize repository", e)
+            })?;
+        } else if flux_dir.exists() && !force {
+            return Err(error::RepositoryError::AlreadyInitialized(flux_dir.clone()));
         }
 
-        fs::create_dir_all(&flux_dir)?;
-        let object_store = ObjectStore::new(&flux_dir);
+        fs::create_dir_all(&flux_dir).map_err(|e| {
+            error::RepositoryError::with_context("failed to initalize repository", e)
+        })?;
+
+        let object_store = ObjectStore::new(&flux_dir).map_err(|e| {
+            error::RepositoryError::with_context(
+                "failed to initalize object store for repository",
+                e,
+            )
+        })?;
+
         let refs = Refs::new(&flux_dir);
-        let config = Config::default(&flux_dir.join("config"))?;
-        let index = Index::new(&flux_dir)?;
+
+        let config = Config::default(&flux_dir.join("config")).map_err(|e| {
+            error::RepositoryError::with_context("faliled to create config for repository", e)
+        })?;
+
+        let index = Index::new(&flux_dir).map_err(|e| {
+            error::RepositoryError::with_context("failed to initalize index for repository", e)
+        })?;
         let work_tree = WorkTree::new(work_tree_path);
 
         let repo = Self {
@@ -109,11 +142,13 @@ impl Repository {
         let config_path = store_dir.join("config");
         let config = Config::from(&config_path)?;
         let index = Index::load(&store_dir)?;
+        let object_store = ObjectStore::load(&store_dir)
+            .with_context(|| format!("failed to load object store"))?;
 
         Ok(Self {
             refs: Refs::load(&store_dir),
             work_tree: WorkTree::new(work_tree_path),
-            object_store: ObjectStore::load(&store_dir),
+            object_store,
             flux_dir: store_dir,
             config,
             index,
@@ -139,14 +174,27 @@ impl Repository {
         }
 
         if write {
-            self.object_store.store(object.as_ref());
+            self.object_store.store(object.as_ref()).map_err(|e| {
+                error::RepositoryError::with_context(
+                    "hash-object failed, could not store object",
+                    e,
+                )
+            })?;
         }
 
         Ok(object.hash())
     }
 
-    pub fn cat(&self, object_hash: &str) -> anyhow::Result<()> {
-        let object = self.object_store.retrieve_object(object_hash);
+    pub fn cat(&self, object_hash: &str) -> Result<(), error::RepositoryError> {
+        let object = self
+            .object_store
+            .retrieve_object(object_hash)
+            .map_err(|e| {
+                error::RepositoryError::with_context(
+                    "cat command failed, could not retrieve object from object store",
+                    e,
+                )
+            })?;
         object.print();
 
         Ok(())
@@ -157,17 +205,30 @@ impl Repository {
         tree_hash: String,
         message: String,
         parent_hash: Option<String>,
-    ) -> String {
-        let (user_name, user_email) = self.config.get();
-        let tree = self.object_store.retrieve_object(&tree_hash);
+    ) -> Result<String, error::RepositoryError> {
+        let (user_name, user_email) = self.config.get().map_err(|e| {
+            error::RepositoryError::with_context(
+                "commit-tree failed, could not read user related fields from configuration",
+                e,
+            )
+        })?;
+
+        let tree = self.object_store.retrieve_object(&tree_hash).map_err(|e| {
+            error::RepositoryError::with_context(
+                "commit-tree command failed, could not load tree from object store",
+                e,
+            )
+        })?;
 
         if tree.object_type() != ObjectType::Tree {
-            panic!("Cannot create a commit from something that is not a tree")
+            return Err(error::RepositoryError::CommitRoot { hash: tree.hash() });
         }
 
         let commit = Commit::new(tree.hash(), user_name, user_email, parent_hash, message);
-        self.object_store.store(&commit);
-        commit.hash()
+        self.object_store.store(&commit).map_err(|e| {
+            error::RepositoryError::with_context("failed commit-tree, could not store object", e)
+        })?;
+        Ok(commit.hash())
     }
 
     pub fn add(&mut self, path: &str) -> anyhow::Result<()> {
@@ -177,51 +238,78 @@ impl Repository {
         Ok(())
     }
 
-    pub fn delete(&mut self, path: &str) -> anyhow::Result<()> {
-        let path = self.work_tree.path().join(path);
-        if let Some(s) = path.to_str() {
-            self.index.remove(s.into())?;
-            self.index.flush()?;
-        } else {
-            bail!("Could not remove file from index.")
+    pub fn delete(&mut self, rel: &str) -> anyhow::Result<()> {
+        let abs = self.work_tree.path().join(rel);
+
+        let key = abs.to_str().with_context(|| {
+            format!("delete command failed for non UTF8 path: {}", abs.display())
+        })?;
+
+        let removed = self
+            .index
+            .remove(key)
+            .with_context(|| format!("failed to update index on key: {key} deletion"))?;
+
+        if !removed {
+            eprint!("warning: {key} is not tracked");
         }
 
         Ok(())
     }
 
-    pub fn commit(&mut self, message: String) -> anyhow::Result<String> {
-        use anyhow::bail;
-
+    pub fn commit(&mut self, message: String) -> Result<String, error::RepositoryError> {
         if self.index.is_empty() {
-            bail!("Nothing to commit");
+            return Err(error::RepositoryError::IndexEmpty);
         }
 
         let tree_hash = self
             .work_tree
-            .build_tree_from_index(&self.index.map, &self.object_store)?;
+            .build_tree_from_index(&self.index.map, &self.object_store)
+            .map_err(|e| {
+                error::RepositoryError::with_context(
+                    "failed to create commit, could not build tree from index",
+                    e,
+                )
+            })?;
 
-        let (user_name, user_email) = self.config.get();
+        let (user_name, user_email) = self.config.get().map_err(|e| {
+            error::RepositoryError::with_context(
+                "failed to create commit, could not read user related fields from configuration",
+                e,
+            )
+        })?;
 
-        let last = self.refs.head_commit()?;
+        // change
+        let last = self.refs.head_commit().unwrap();
         let parent = (!last.is_empty()).then_some(last);
 
         let commit = Commit::new(tree_hash, user_name, user_email, parent, message);
 
-        self.object_store.store(&commit);
+        self.object_store.store(&commit).map_err(|e| {
+            error::RepositoryError::with_context("commit failed, could not store object", e)
+        })?;
 
         let hash = commit.hash();
-        self.refs.update_head(&hash)?;
 
-        self.index.clear()?;
+        //change
+        self.refs.update_head(&hash).unwrap();
+
+        //change
+        self.index.clear().unwrap();
 
         Ok(hash)
     }
 
-    pub fn log(&self, _reference: Option<String>) -> anyhow::Result<()> {
+    pub fn log(&self, _reference: Option<String>) -> Result<(), error::RepositoryError> {
         let mut current_hash = self.refs.head_commit().ok().filter(|s| !s.is_empty());
         while let Some(hash) = current_hash {
             self.cat(&hash)?;
-            let current = self.object_store.retrieve_object(&hash);
+            let current = self.object_store.retrieve_object(&hash).map_err(|e| {
+                error::RepositoryError::with_context(
+                    "log command failed, could not retrieve objects from object store",
+                    e,
+                )
+            })?;
             if let Some(commit) = current.as_any().downcast_ref::<Commit>() {
                 current_hash = commit.parent_hash().map(String::from);
             } else {

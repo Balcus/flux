@@ -9,8 +9,8 @@ fn main() -> anyhow::Result<()> {
     let repo_path = cli.repo_path.clone();
 
     match cli.command {
-        Commands::Init { path } => {
-            Repository::init(path, false)?;
+        Commands::Init { path, force } => {
+            Repository::init(path, force)?;
         }
         Commands::Set { key, value } => {
             commands::set(repo_path, key, value)?;

@@ -158,9 +158,13 @@ fn commit_test() {
     let main_ref = fs::read_to_string(".flux/refs/heads/main").unwrap();
     assert_eq!(main_ref.trim(), commit_hash);
 
-    let commit_content =
-        String::from_utf8(repo.object_store.retrieve_object(&commit_hash).content())
-            .expect("Failed to read commit content");
+    let commit_content = String::from_utf8(
+        repo.object_store
+            .retrieve_object(&commit_hash)
+            .unwrap()
+            .content(),
+    )
+    .expect("Failed to read commit content");
 
     assert!(commit_content.starts_with("tree "));
     assert!(commit_content.contains("author Test User <test@example.com>"));
@@ -191,6 +195,7 @@ fn commit_test() {
     let second_commit_content = String::from_utf8(
         repo.object_store
             .retrieve_object(&second_commit_hash)
+            .unwrap()
             .content(),
     )
     .expect("Failed to read second commit content to string");
@@ -224,8 +229,8 @@ fn branching_test() {
             .expect("Could not read current branch name"),
         "main"
     );
-    let head_content =
-        fs::read_to_string(&repo.flux_dir.join(&repo.refs.head_ref().unwrap())).expect("Could not read HEAD content");
+    let head_content = fs::read_to_string(&repo.flux_dir.join(&repo.refs.head_ref().unwrap()))
+        .expect("Could not read HEAD content");
     assert_eq!(head_content, first_commit_hash);
 
     repo.new_branch("feature");
@@ -250,11 +255,34 @@ fn branching_test() {
 
     let main_head = fs::read_to_string(&repo.flux_dir.join("refs/heads/main")).unwrap();
     assert_eq!(second_commit_hash, main_head);
-    assert_eq!(second_commit_hash, repo.refs.head_commit().expect("Failed to read the commit HEAD points to"));
+    assert_eq!(
+        second_commit_hash,
+        repo.refs
+            .head_commit()
+            .expect("Failed to read the commit HEAD points to")
+    );
 
     repo.switch_branch("feature", false);
-    assert_eq!(repo.refs.current_branch().expect("Failed to read current branch name"), "feature");
-    assert_eq!(first_commit_hash, repo.refs.head_commit().expect("Failed to read the commit HEAD points to"));
-    assert!(fs::read_to_string("./README.md").unwrap().contains("Read this file before running the project"));
-    assert!(!fs::read_to_string("./README.md").unwrap().contains("Added something new to README"));
+    assert_eq!(
+        repo.refs
+            .current_branch()
+            .expect("Failed to read current branch name"),
+        "feature"
+    );
+    assert_eq!(
+        first_commit_hash,
+        repo.refs
+            .head_commit()
+            .expect("Failed to read the commit HEAD points to")
+    );
+    assert!(
+        fs::read_to_string("./README.md")
+            .unwrap()
+            .contains("Read this file before running the project")
+    );
+    assert!(
+        !fs::read_to_string("./README.md")
+            .unwrap()
+            .contains("Added something new to README")
+    );
 }
