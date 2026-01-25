@@ -6,12 +6,13 @@ use std::io::Write;
 use std::path::PathBuf;
 
 // TODO: only allow the set of preset fileds and on get return a struct for them insted of tuple
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct ConfigFields {
     user_name: Option<String>,
     user_email: Option<String>,
 }
 
+#[derive(Debug)]
 pub struct Config {
     path: PathBuf,
     pub user_name: Option<String>,

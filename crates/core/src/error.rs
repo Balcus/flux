@@ -4,34 +4,37 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum IoError {
-    #[error("failed to read {}. {source}.", path.display())]
+    #[error("Failed to read '{}'. {source}.", path.display())]
     Read { path: PathBuf, source: io::Error },
 
-    #[error("failed to write {}. {source}.", path.display())]
+    #[error("Failed to write '{}'. {source}.", path.display())]
     Write { path: PathBuf, source: io::Error },
 
-    #[error("failed to create {}. {source}.", path.display())]
+    #[error("Failed to create '{}'. {source}.", path.display())]
     Create { path: PathBuf, source: io::Error },
 
-    #[error("failed to delete {}. {source}.", path.display())]
+    #[error("Failed to delete '{}'. {source}.", path.display())]
     Delete { path: PathBuf, source: io::Error },
 
-    #[error("missing path {path}.")]
+    #[error("Missing required path '{}'.", path.display())]
     Missing { path: PathBuf },
 
-    #[error("failed rename from: {} to: {}. {source}.", from.display(), to.display())]
+    #[error("Failed rename from: '{}' to: '{}'. {source}.", from.display(), to.display())]
     Rename {
         from: PathBuf,
         to: PathBuf,
         source: io::Error,
     },
 
-    #[error("failed to open file {}. {source}", path.display())]
+    #[error("Failed to open file '{}'. {source}", path.display())]
     Open { path: PathBuf, source: io::Error },
+
+    #[error("Failed to read metadata for '{}'. {source}", path.display())]
+    Metadata { path: PathBuf, source: io::Error },
 }
 
 #[derive(Error, Debug)]
-#[error("failed to parse '{}'. {source}", path.display())]
+#[error("Failed to parse '{}'. {source}", path.display())]
 #[non_exhaustive]
 pub struct ParseError {
     path: PathBuf,
@@ -47,13 +50,13 @@ impl ParseError {
 
 #[derive(Error, Debug)]
 pub enum ObjectError {
-    #[error("invalid object format: {hash} at {path}.")]
+    #[error("Invalid format for object {hash} at '{path}'.")]
     InvalidFormat { path: PathBuf, hash: String },
 
-    #[error("unsupported object type: {object_type}.")]
+    #[error("Unsupported object type: '{object_type}'.")]
     Unsupported { object_type: String },
 
-    #[error("size mismatch: {hash} at {path}: expected {expected}, got {got}.")]
+    #[error("Size mismatch for object {hash} at '{path}': expected {expected}, got {got}.")]
     SizeMismatch {
         path: PathBuf,
         hash: String,
@@ -88,10 +91,10 @@ pub enum WorkTreeError {
     #[error(transparent)]
     ObjectStore(#[from] ObjectStoreError),
 
-    #[error("object downcast error, expected type: {expected}.")]
+    #[error("Object downcast error, expected type: '{expected}'.")]
     Downcast { expected: &'static str },
 
-    #[error("invalid object hash : {hash}. {source}.")]
+    #[error("Invalid object hash: {hash}. {source}.")]
     InvalidHash { hash: String, source: FromHexError },
 }
 
@@ -100,16 +103,37 @@ pub enum ConfigError {
     #[error(transparent)]
     Io(#[from] IoError),
 
-    #[error("failed to create toml from string. {0}")]
+    #[error("Failed to create toml from string. {0}")]
     TomlFromString(#[from] toml::de::Error),
 
-    #[error("the variable {0} must be set, try the set command to do so")]
+    #[error("The variable {0} must be set, try using 'flux set {0} ...'")]
     NotSet(&'static str),
 }
 
 #[derive(Debug, Error)]
+pub enum RefsError {
+    #[error(transparent)]
+    Io(#[from] IoError),
+
+    #[error("Invalid head format: {head}.")]
+    InvalidHead { head: String },
+
+    #[error("Branch: '{0}' already exists.")]
+    BranchAlreadyExists(String),
+
+    #[error("Branch: '{0}' does not exist.")]
+    MissingBranch(String),
+
+    #[error("Cannot delete the current branch '{0}'. Switch to a different branch and try again.")]
+    DeleteCurrentBranch(String),
+}
+
+#[derive(Debug, Error)]
 pub enum RepositoryError {
-    #[error("repositroy already initialized at {0}, if this is intentional use the --force flag.")]
+    #[error(transparent)]
+    Io(#[from] IoError),
+
+    #[error("Repositroy already initialized at {0}, if this is intentional use the --force flag.")]
     AlreadyInitialized(PathBuf),
 
     #[error("{context}. {source}")]
@@ -119,13 +143,20 @@ pub enum RepositoryError {
         source: Box<dyn std::error::Error + Send + Sync>,
     },
 
-    #[error("cannot use object {hash} as commit root, object is not a tree")]
-    CommitRoot {
-        hash: String
-    },
+    #[error("Cannot use object {hash} as commit root, object is not a tree.")]
+    CommitRoot { hash: String },
 
-    #[error("nothing to commit, index is empty")]
-    IndexEmpty
+    #[error("Nothing to commit, index is empty.")]
+    IndexEmpty,
+
+    #[error("Repository not initialized at: '{0}'. run 'flux init {0}' and try again.")]
+    NotRepository(PathBuf),
+
+    #[error("There was an error trying to operate on path: '{}'.", path.display())]
+    PathName { path: PathBuf },
+
+    #[error("Repository has uncommited changes, commit them and try again or use the --force flag")]
+    UncommitedChanges
 }
 
 impl RepositoryError {

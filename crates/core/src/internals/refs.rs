@@ -1,149 +1,223 @@
+use crate::error;
 use std::{
     collections::HashMap,
-    fs,
+    fs::{self, File},
     path::{Path, PathBuf},
 };
 
+#[derive(Debug)]
 pub struct Refs {
     pub refs_path: PathBuf,
     pub branches: HashMap<String, String>,
     pub head_path: PathBuf,
 }
 
+pub type Result<T> = std::result::Result<T, error::RefsError>;
+
 impl Refs {
-    fn parse_head_ref(head_contents: &str) -> anyhow::Result<String> {
+    fn parse_head_ref(head_contents: &str) -> Result<String> {
         let s = head_contents.trim();
+
         let r = s
             .strip_prefix("ref: ")
-            .ok_or_else(|| anyhow::anyhow!("Invalid HEAD format: {}", s))?;
+            .ok_or_else(|| error::RefsError::InvalidHead {
+                head: s.to_string(),
+            })?;
+
         if !r.starts_with("refs/heads/") {
-            anyhow::bail!("Invalid HEAD ref (expected refs/heads/*): {}", r);
+            return Err(error::RefsError::InvalidHead {
+                head: r.to_string(),
+            })?;
         }
+
         Ok(r.to_string())
     }
 
-    pub fn new(flux_dir: &Path) -> Self {
+    pub fn new(flux_dir: &Path) -> Result<Self> {
         let refs_path = flux_dir.join("refs");
         let head_path = flux_dir.join("HEAD");
+        let heads_path = refs_path.join("heads");
+        let main_path = heads_path.join("main");
 
-        fs::create_dir_all(&refs_path.join("heads"))
-            .expect("Failed to create refs/heads directory");
+        fs::create_dir_all(&heads_path).map_err(|e| error::IoError::Create {
+            path: heads_path.clone(),
+            source: e,
+        })?;
 
-        fs::write(refs_path.join("heads/main"), "").expect("Failed to create main branch");
-        fs::write(&head_path, "ref: refs/heads/main\n").expect("Failed to init HEAD");
+        File::create(&main_path).map_err(|e| error::IoError::Create {
+            path: main_path.clone(),
+            source: e,
+        })?;
+        fs::write(&main_path, "").map_err(|e| error::IoError::Write {
+            path: main_path.clone(),
+            source: e,
+        })?;
+
+        fs::write(&head_path, "ref: refs/heads/main\n").map_err(|e| error::IoError::Write {
+            path: head_path.clone(),
+            source: e,
+        })?;
 
         let mut branches = HashMap::new();
         branches.insert("main".to_string(), "".to_string());
 
-        Self {
+        Ok(Self {
             refs_path,
             branches,
             head_path,
-        }
+        })
     }
 
-    pub fn load(flux_dir: &Path) -> Self {
+    pub fn load(flux_dir: &Path) -> Result<Self> {
         let refs_path = flux_dir.join("refs");
         let heads_path = refs_path.join("heads");
 
-        if !refs_path.is_dir() || !heads_path.is_dir() {
-            panic!("Missing refs directories");
+        if !refs_path.is_dir() {
+            return Err(error::IoError::Missing {
+                path: refs_path.clone(),
+            }
+            .into());
+        }
+        if !heads_path.is_dir() {
+            return Err(error::IoError::Missing {
+                path: heads_path.clone(),
+            }
+            .into());
         }
 
-        let heads = fs::read_dir(&heads_path).expect("Failed to read refs/heads");
-        let mut map: HashMap<String, String> = HashMap::new();
+        let heads = fs::read_dir(&heads_path).map_err(|source| error::IoError::Read {
+            path: heads_path.clone(),
+            source,
+        })?;
 
-        for file in heads {
-            let file = file.expect("Failed to read file");
-            let name = file.file_name().to_string_lossy().into_owned();
-            let head = fs::read_to_string(file.path())
-                .expect(&format!("Failed to read head: {:?}", file.path()));
+        let mut map: HashMap<String, String> = HashMap::new();
+        for entry_res in heads {
+            let entry = entry_res.map_err(|source| error::IoError::Read {
+                path: heads_path.clone(),
+                source,
+            })?;
+
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let path = entry.path();
+
+            let head = fs::read_to_string(&path).map_err(|source| error::IoError::Read {
+                path: path.clone(),
+                source,
+            })?;
+
             map.insert(name, head.trim().to_string());
         }
 
-        Self {
+        Ok(Self {
             refs_path,
             branches: map,
             head_path: flux_dir.join("HEAD"),
-        }
+        })
     }
 
-    pub fn head_ref(&self) -> anyhow::Result<String> {
-        let raw = fs::read_to_string(&self.head_path)?;
+    pub fn head_ref(&self) -> Result<String> {
+        let raw = fs::read_to_string(&self.head_path).map_err(|e| error::IoError::Read {
+            path: self.head_path.clone(),
+            source: e,
+        })?;
         Self::parse_head_ref(&raw)
     }
 
-    pub fn current_branch(&self) -> anyhow::Result<String> {
+    pub fn current_branch(&self) -> Result<String> {
         let head_ref = self.head_ref()?;
-        let name = head_ref
-            .strip_prefix("refs/heads/")
-            .ok_or_else(|| anyhow::anyhow!("Invalid HEAD ref: {}", head_ref))?;
+
+        let name =
+            head_ref
+                .strip_prefix("refs/heads/")
+                .ok_or_else(|| error::RefsError::InvalidHead {
+                    head: head_ref.clone(),
+                })?;
+
         Ok(name.to_string())
     }
 
-    pub fn head_ref_path(&self) -> anyhow::Result<PathBuf> {
+    pub fn head_ref_path(&self) -> Result<PathBuf> {
         let head_ref = self.head_ref()?;
         let rel = head_ref
             .strip_prefix("refs/")
-            .ok_or_else(|| anyhow::anyhow!("Invalid HEAD ref: {}", head_ref))?;
+            .ok_or_else(|| error::RefsError::InvalidHead {
+                head: head_ref.clone(),
+            })?;
         Ok(self.refs_path.join(rel))
     }
 
-    pub fn head_commit(&self) -> anyhow::Result<String> {
+    pub fn head_commit(&self) -> Result<String> {
         let branch_path = self.head_ref_path()?;
-        Ok(fs::read_to_string(branch_path)
-            .unwrap_or_default()
-            .trim()
-            .to_string())
+        let last_commit = fs::read_to_string(&branch_path).map_err(|e| error::IoError::Read {
+            path: branch_path.clone(),
+            source: e,
+        })?;
+        Ok(last_commit.trim().to_string())
     }
 
-    pub fn set_head(&self, branch: &str) {
-        fs::write(&self.head_path, format!("ref: refs/heads/{}\n", branch))
-            .expect("Failed to set HEAD");
+    pub fn set_head(&self, branch: &str) -> Result<()> {
+        fs::write(&self.head_path, format!("ref: refs/heads/{}\n", branch)).map_err(|e| {
+            error::IoError::Write {
+                path: self.head_path.clone(),
+                source: e,
+            }
+        })?;
+        Ok(())
     }
 
-    pub fn new_branch(&mut self, name: &str) {
+    pub fn new_branch(&mut self, name: &str) -> Result<()> {
         let path = self.refs_path.join("heads").join(name);
 
         if path.exists() {
-            panic!("Branch already exists");
+            return Err(error::RefsError::BranchAlreadyExists(name.to_string()));
         }
 
-        let start_commit = self.head_commit().expect("Failed to read contents of HEAD");
-        fs::write(&path, start_commit.as_bytes()).expect("Failed to write branch head");
+        let start_commit = self.head_commit()?;
+        fs::write(&path, start_commit.as_bytes()).map_err(|e| error::IoError::Write {
+            path: path.clone(),
+            source: e,
+        })?;
 
         self.branches.insert(name.to_string(), start_commit);
-        self.set_head(name);
+        self.set_head(name)?;
+
+        Ok(())
     }
 
-    pub fn delete_branch(&mut self, name: &str) -> anyhow::Result<()> {
+    pub fn delete_branch(&mut self, name: &str) -> Result<()> {
         let current = self.current_branch()?;
         if name == current {
-            anyhow::bail!("Cannot delete the current branch '{}'", name);
+            return Err(error::RefsError::DeleteCurrentBranch(name.to_string()))?;
         }
 
         let path = self.refs_path.join("heads").join(name);
         if !path.is_file() {
-            anyhow::bail!("Branch '{}' does not exist", name);
+            return Err(error::RefsError::MissingBranch(name.to_string()))?;
         }
 
-        fs::remove_file(&path)?;
+        fs::remove_file(&path).map_err(|e| error::IoError::Delete {
+            path: path.clone(),
+            source: e,
+        })?;
         self.branches.remove(name);
         Ok(())
     }
 
-    pub fn switch_branch(&mut self, to: &str) -> anyhow::Result<()> {
+    pub fn switch_branch(&mut self, to: &str) -> Result<()> {
         let path = self.refs_path.join("heads").join(to);
         if !path.is_file() {
-            anyhow::bail!("Branch '{}' does not exist", to);
+            return Err(error::RefsError::MissingBranch(to.to_string()))?;
         }
-        self.set_head(to);
+        self.set_head(to)?;
         Ok(())
     }
 
-    pub fn update_head(&mut self, commit_hash: &str) -> anyhow::Result<()> {
+    pub fn update_head(&mut self, commit_hash: &str) -> Result<()> {
         let path = self.head_ref_path()?;
-        fs::write(&path, commit_hash.as_bytes())?;
+        fs::write(&path, commit_hash.as_bytes()).map_err(|e| error::IoError::Write {
+            path: path.clone(),
+            source: e,
+        })?;
 
         let branch = self.current_branch()?;
         self.branches.insert(branch, commit_hash.to_string());
@@ -157,7 +231,7 @@ impl Refs {
         names
     }
 
-    pub fn format_branches(&self) -> anyhow::Result<String> {
+    pub fn format_branches(&self) -> Result<String> {
         let current = self.current_branch()?;
         let mut out = String::new();
 
@@ -174,7 +248,7 @@ impl Refs {
         Ok(out)
     }
 
-    pub fn list_branches(&self) -> anyhow::Result<Vec<String>> {
+    pub fn list_branches(&self) -> Result<Vec<String>> {
         let current = self.current_branch()?;
         let mut res = Vec::new();
 

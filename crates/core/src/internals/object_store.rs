@@ -2,7 +2,6 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-
 use crate::{
     error,
     objects::{
@@ -14,6 +13,7 @@ use crate::{
     utils,
 };
 
+#[derive(Debug)]
 pub struct ObjectStore {
     pub path: PathBuf,
 }

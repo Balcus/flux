@@ -43,6 +43,45 @@ fn init_test() {
 
 #[test]
 #[serial]
+fn init_when_already_initialized() {
+    let (_temp, project_path) = common::setup_test_project();
+    let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
+
+    Repository::init(None, false).unwrap();
+    let err = Repository::init(None, false).unwrap_err();
+
+    match &err {
+        flux_core::error::RepositoryError::AlreadyInitialized(path) => {
+            assert!(path.ends_with(".flux"));
+        }
+        other => panic!("expected AlreadyInitialized error, got: {other:?}"),
+    }
+    println!("{err}");
+}
+
+#[test]
+#[serial]
+fn open_without_repo() {
+    let (_temp, project_path) = common::setup_test_project();
+    let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
+
+    let err = Repository::open(None).err().unwrap();
+    match &err {
+        flux_core::error::RepositoryError::NotRepository(path) => {
+            let expected = project_path
+                .canonicalize()
+                .unwrap_or_else(|_| project_path.clone());
+
+            assert_eq!(path, &expected);
+            assert!(path.is_absolute());
+        }
+        other => panic!("expected NotRepository error, got: {other:?}"),
+    }
+    println!("{err}");
+}
+
+#[test]
+#[serial]
 fn set_test() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
@@ -206,6 +245,41 @@ fn commit_test() {
 
 #[test]
 #[serial]
+fn commit_with_empty_index() {
+    let (_temp, project_path) = common::setup_test_project();
+    let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
+
+    let mut repo = Repository::init(None, false).unwrap();
+    let err = repo.commit("empty".to_string()).unwrap_err();
+
+    match err {
+        flux_core::error::RepositoryError::IndexEmpty => {}
+        other => panic!("expected IndexEmpty error, got: {other:?}"),
+    }
+    println!("{err}")
+}
+
+#[test]
+#[serial]
+fn commit_without_credentials() {
+    let (_temp, project_path) = common::setup_test_project();
+    let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
+
+    let mut repo = Repository::init(None, false).unwrap();
+    repo.add("README.md").unwrap();
+
+    let err = repo.commit("commit".to_string()).err().unwrap();
+
+    match err {
+        flux_core::error::RepositoryError::Context { .. } => {},
+        other => panic!("unexpected error: {other:?}"),
+    }
+
+    println!("{err}")
+}
+
+#[test]
+#[serial]
 fn branching_test() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
@@ -233,7 +307,7 @@ fn branching_test() {
         .expect("Could not read HEAD content");
     assert_eq!(head_content, first_commit_hash);
 
-    repo.new_branch("feature");
+    repo.new_branch("feature").unwrap();
     assert!(fs::exists(&repo.flux_dir.join("refs/heads/feature")).unwrap());
     let feature_content = fs::read_to_string(&repo.flux_dir.join("refs/heads/feature")).unwrap();
     assert_eq!(feature_content, head_content);
@@ -242,7 +316,7 @@ fn branching_test() {
     assert!(fs::exists(repo.work_tree.path().join("src/main.rs")).unwrap());
     assert!(fs::exists(repo.work_tree.path().join("src/lib.rs")).unwrap());
 
-    repo.switch_branch("main", false);
+    repo.switch_branch("main", false).unwrap();
     assert!(fs::exists(repo.work_tree.path().join("README.md")).unwrap());
     assert!(fs::exists(repo.work_tree.path().join("src/main.rs")).unwrap());
     assert!(fs::exists(repo.work_tree.path().join("src/lib.rs")).unwrap());
@@ -262,7 +336,7 @@ fn branching_test() {
             .expect("Failed to read the commit HEAD points to")
     );
 
-    repo.switch_branch("feature", false);
+    repo.switch_branch("feature", false).unwrap();
     assert_eq!(
         repo.refs
             .current_branch()
@@ -286,3 +360,6 @@ fn branching_test() {
             .contains("Added something new to README")
     );
 }
+
+
+
