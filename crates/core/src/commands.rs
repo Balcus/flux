@@ -70,8 +70,10 @@ pub fn create_branch(repo_path: Option<String>, name: String) -> anyhow::Result<
     Ok(())
 }
 
-pub fn delete_branch(_repo_path: Option<String>, _name: String) -> anyhow::Result<()> {
-    todo!()
+pub fn delete_branch(repo_path: Option<String>, name: String) -> anyhow::Result<()> {
+    let mut repository = Repository::open(repo_path)?;
+    repository.delete_branch(&name)?;
+    Ok(())
 }
 
 pub fn switch_branch(repo_path: Option<String>, name: String, force: bool) -> anyhow::Result<()> {

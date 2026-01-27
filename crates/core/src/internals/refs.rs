@@ -39,24 +39,14 @@ impl Refs {
         let heads_path = refs_path.join("heads");
         let main_path = heads_path.join("main");
 
-        fs::create_dir_all(&heads_path).map_err(|e| error::IoError::Create {
-            path: heads_path.clone(),
-            source: e,
-        })?;
+        fs::create_dir_all(&heads_path)
+            .map_err(|e| error::IoError::create_error(&heads_path, e))?;
 
-        File::create(&main_path).map_err(|e| error::IoError::Create {
-            path: main_path.clone(),
-            source: e,
-        })?;
-        fs::write(&main_path, "").map_err(|e| error::IoError::Write {
-            path: main_path.clone(),
-            source: e,
-        })?;
+        File::create(&main_path).map_err(|e| error::IoError::create_error(&main_path, e))?;
+        fs::write(&main_path, "").map_err(|e| error::IoError::write_error(&main_path, e))?;
 
-        fs::write(&head_path, "ref: refs/heads/main\n").map_err(|e| error::IoError::Write {
-            path: head_path.clone(),
-            source: e,
-        })?;
+        fs::write(&head_path, "ref: refs/heads/main\n")
+            .map_err(|e| error::IoError::write_error(&head_path, e))?;
 
         let mut branches = HashMap::new();
         branches.insert("main".to_string(), "".to_string());
@@ -73,37 +63,22 @@ impl Refs {
         let heads_path = refs_path.join("heads");
 
         if !refs_path.is_dir() {
-            return Err(error::IoError::Missing {
-                path: refs_path.clone(),
-            }
-            .into());
+            return Err(error::IoError::missing_error(&refs_path).into());
         }
         if !heads_path.is_dir() {
-            return Err(error::IoError::Missing {
-                path: heads_path.clone(),
-            }
-            .into());
+            return Err(error::IoError::missing_error(&heads_path).into());
         }
 
-        let heads = fs::read_dir(&heads_path).map_err(|source| error::IoError::Read {
-            path: heads_path.clone(),
-            source,
-        })?;
+        let heads =
+            fs::read_dir(&heads_path).map_err(|e| error::IoError::read_error(&heads_path, e))?;
 
         let mut map: HashMap<String, String> = HashMap::new();
         for entry_res in heads {
-            let entry = entry_res.map_err(|source| error::IoError::Read {
-                path: heads_path.clone(),
-                source,
-            })?;
-
+            let entry = entry_res.map_err(|e| error::IoError::read_error(&heads_path, e))?;
             let name = entry.file_name().to_string_lossy().into_owned();
             let path = entry.path();
-
-            let head = fs::read_to_string(&path).map_err(|source| error::IoError::Read {
-                path: path.clone(),
-                source,
-            })?;
+            let head =
+                fs::read_to_string(&path).map_err(|e| error::IoError::read_error(&path, e))?;
 
             map.insert(name, head.trim().to_string());
         }
@@ -116,10 +91,8 @@ impl Refs {
     }
 
     pub fn head_ref(&self) -> Result<String> {
-        let raw = fs::read_to_string(&self.head_path).map_err(|e| error::IoError::Read {
-            path: self.head_path.clone(),
-            source: e,
-        })?;
+        let raw = fs::read_to_string(&self.head_path)
+            .map_err(|e| error::IoError::read_error(&self.head_path, e))?;
         Self::parse_head_ref(&raw)
     }
 
@@ -148,20 +121,14 @@ impl Refs {
 
     pub fn head_commit(&self) -> Result<String> {
         let branch_path = self.head_ref_path()?;
-        let last_commit = fs::read_to_string(&branch_path).map_err(|e| error::IoError::Read {
-            path: branch_path.clone(),
-            source: e,
-        })?;
+        let last_commit = fs::read_to_string(&branch_path)
+            .map_err(|e| error::IoError::read_error(&branch_path, e))?;
         Ok(last_commit.trim().to_string())
     }
 
     pub fn set_head(&self, branch: &str) -> Result<()> {
-        fs::write(&self.head_path, format!("ref: refs/heads/{}\n", branch)).map_err(|e| {
-            error::IoError::Write {
-                path: self.head_path.clone(),
-                source: e,
-            }
-        })?;
+        fs::write(&self.head_path, format!("ref: refs/heads/{}\n", branch))
+            .map_err(|e| error::IoError::write_error(&self.head_path, e))?;
         Ok(())
     }
 
@@ -173,10 +140,8 @@ impl Refs {
         }
 
         let start_commit = self.head_commit()?;
-        fs::write(&path, start_commit.as_bytes()).map_err(|e| error::IoError::Write {
-            path: path.clone(),
-            source: e,
-        })?;
+        fs::write(&path, start_commit.as_bytes())
+            .map_err(|e| error::IoError::write_error(&path, e))?;
 
         self.branches.insert(name.to_string(), start_commit);
         self.set_head(name)?;
@@ -195,10 +160,7 @@ impl Refs {
             return Err(error::RefsError::MissingBranch(name.to_string()))?;
         }
 
-        fs::remove_file(&path).map_err(|e| error::IoError::Delete {
-            path: path.clone(),
-            source: e,
-        })?;
+        fs::remove_file(&path).map_err(|e| error::IoError::delete_error(&path, e))?;
         self.branches.remove(name);
         Ok(())
     }
@@ -214,10 +176,8 @@ impl Refs {
 
     pub fn update_head(&mut self, commit_hash: &str) -> Result<()> {
         let path = self.head_ref_path()?;
-        fs::write(&path, commit_hash.as_bytes()).map_err(|e| error::IoError::Write {
-            path: path.clone(),
-            source: e,
-        })?;
+        fs::write(&path, commit_hash.as_bytes())
+            .map_err(|e| error::IoError::write_error(&path, e))?;
 
         let branch = self.current_branch()?;
         self.branches.insert(branch, commit_hash.to_string());

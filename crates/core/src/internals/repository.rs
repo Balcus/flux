@@ -29,10 +29,7 @@ impl Repository {
     }
 
     fn add_path(&mut self, path: &Path) -> Result<()> {
-        let metadata = fs::metadata(path).map_err(|e| error::IoError::Metadata {
-            path: path.to_owned(),
-            source: e,
-        })?;
+        let metadata = fs::metadata(path).map_err(|e| error::IoError::metadata_error(path, e))?;
 
         if metadata.is_file() {
             self.add_file(path)?;
@@ -41,16 +38,9 @@ impl Repository {
                 return Ok(());
             }
 
-            let iter = fs::read_dir(path).map_err(|e| error::IoError::Read {
-                path: path.to_owned(),
-                source: e,
-            })?;
-
+            let iter = fs::read_dir(path).map_err(|e| error::IoError::read_error(path, e))?;
             for entry in iter {
-                let entry = entry.map_err(|e| error::IoError::Read {
-                    path: path.to_owned(),
-                    source: e,
-                })?;
+                let entry = entry.map_err(|e| error::IoError::read_error(path, e))?;
                 self.add_path(&entry.path())?;
             }
         }
@@ -60,15 +50,10 @@ impl Repository {
 
     fn add_file(&mut self, path: &Path) -> Result<()> {
         let blob = Blob::new(&path);
-        self.object_store.store(&blob).map_err(|e| {
-            error::RepositoryError::with_context(
-                "Failed adding file to index, could not store object",
-                e,
-            )
-        })?;
+        self.object_store.store(&blob)?;
 
         let rel_path = path.strip_prefix(self.work_tree.path()).map_err(|e| {
-            error::RepositoryError::with_context(
+            error::RepositoryError::from(
                 "Failed to strip prefix from file. file might be outisde of the working directory",
                 e,
             )
@@ -80,9 +65,7 @@ impl Repository {
                 path: rel_path.to_owned(),
             })?;
 
-        self.index
-            .add(rel_str.to_owned(), blob.hash())
-            .map_err(|e| error::RepositoryError::with_context("Failed to add file to index", e))?;
+        self.index.add(rel_str.to_owned(), blob.hash())?;
 
         Ok(())
     }
@@ -94,36 +77,18 @@ impl Repository {
         let flux_dir = work_tree_path.join(".flux");
 
         if flux_dir.exists() && force {
-            fs::remove_dir_all(&flux_dir).map_err(|e| {
-                error::RepositoryError::with_context("Failed to force reinitialize repository", e)
-            })?;
+            fs::remove_dir_all(&flux_dir).map_err(|e| error::IoError::delete_error(&flux_dir, e))?;
         } else if flux_dir.exists() && !force {
             let abs = flux_dir.canonicalize().unwrap_or_else(|_| flux_dir.clone());
             return Err(error::RepositoryError::AlreadyInitialized(abs));
         }
 
-        fs::create_dir_all(&flux_dir).map_err(|e| {
-            error::RepositoryError::with_context("Failed to initalize repository", e)
-        })?;
+        fs::create_dir_all(&flux_dir).map_err(|e| error::IoError::create_error(&flux_dir, e))?;
 
-        let object_store = ObjectStore::new(&flux_dir).map_err(|e| {
-            error::RepositoryError::with_context(
-                "Failed to initalize object store for repository",
-                e,
-            )
-        })?;
-
-        let refs = Refs::new(&flux_dir).map_err(|e| {
-            error::RepositoryError::with_context("Failed to initalize refs for repository", e)
-        })?;
-
-        let config = Config::default(&flux_dir.join("config")).map_err(|e| {
-            error::RepositoryError::with_context("Faliled to create config for repository", e)
-        })?;
-
-        let index = Index::new(&flux_dir).map_err(|e| {
-            error::RepositoryError::with_context("Failed to initalize index for repository", e)
-        })?;
+        let object_store = ObjectStore::new(&flux_dir)?;
+        let refs = Refs::new(&flux_dir)?;
+        let config = Config::default(&flux_dir.join("config"))?;
+        let index = Index::new(&flux_dir)?;
         let work_tree = WorkTree::new(work_tree_path);
 
         let repo = Self {
@@ -153,30 +118,10 @@ impl Repository {
         }
 
         let config_path = store_dir.join("config");
-        let config = Config::from(&config_path).map_err(|e| {
-            error::RepositoryError::with_context(
-                "Failed to open repository, could not load configuration.",
-                e,
-            )
-        })?;
-        let index = Index::load(&store_dir).map_err(|e| {
-            error::RepositoryError::with_context(
-                "Failed to open repository, could not load index.",
-                e,
-            )
-        })?;
-        let object_store = ObjectStore::load(&store_dir).map_err(|e| {
-            error::RepositoryError::with_context(
-                "Failed to open repository, could not load object store.",
-                e,
-            )
-        })?;
-        let refs = Refs::load(&store_dir).map_err(|e| {
-            error::RepositoryError::with_context(
-                "Failed to open repository, could not load refs.",
-                e,
-            )
-        })?;
+        let config = Config::from(&config_path)?;
+        let index = Index::load(&store_dir)?;
+        let object_store = ObjectStore::load(&store_dir)?;
+        let refs = Refs::load(&store_dir)?;
 
         Ok(Self {
             refs,
@@ -189,18 +134,13 @@ impl Repository {
     }
 
     pub fn set(&mut self, key: String, value: String) -> Result<()> {
-        self.config.set(key, value).map_err(|e| {
-            error::RepositoryError::with_context("Failed to set key in config file.", e)
-        })?;
+        self.config.set(key, value)?;
         Ok(())
     }
 
     pub fn hash_object(&self, path: String, write: bool) -> Result<String> {
         let full_path = self.work_tree.path().join(&path);
-        let metadata = full_path.metadata().expect(&format!(
-            "Could not read metadata for file: {:?}",
-            full_path
-        ));
+        let metadata = full_path.metadata().map_err(|e| error::IoError::metadata_error(&full_path, e))?;
         let object: Box<dyn FluxObject>;
         if metadata.is_file() {
             object = Box::new(Blob::new(&full_path));
@@ -209,27 +149,14 @@ impl Repository {
         }
 
         if write {
-            self.object_store.store(object.as_ref()).map_err(|e| {
-                error::RepositoryError::with_context(
-                    "Hash-object failed, could not store object",
-                    e,
-                )
-            })?;
+            self.object_store.store(object.as_ref())?;
         }
 
         Ok(object.hash())
     }
 
     pub fn cat(&self, object_hash: &str) -> Result<()> {
-        let object = self
-            .object_store
-            .retrieve_object(object_hash)
-            .map_err(|e| {
-                error::RepositoryError::with_context(
-                    "Cat command failed, could not retrieve object from object store",
-                    e,
-                )
-            })?;
+        let object = self.object_store.retrieve_object(object_hash)?;
         object.print();
 
         Ok(())
@@ -241,28 +168,15 @@ impl Repository {
         message: String,
         parent_hash: Option<String>,
     ) -> Result<String> {
-        let (user_name, user_email) = self.config.get().map_err(|e| {
-            error::RepositoryError::with_context(
-                "Commit-tree failed, could not read user related fields from configuration",
-                e,
-            )
-        })?;
-
-        let tree = self.object_store.retrieve_object(&tree_hash).map_err(|e| {
-            error::RepositoryError::with_context(
-                "Commit-tree command failed, could not load tree from object store",
-                e,
-            )
-        })?;
+        let (user_name, user_email) = self.config.get()?;
+        let tree = self.object_store.retrieve_object(&tree_hash)?;
 
         if tree.object_type() != ObjectType::Tree {
             return Err(error::RepositoryError::CommitRoot { hash: tree.hash() });
         }
 
         let commit = Commit::new(tree.hash(), user_name, user_email, parent_hash, message);
-        self.object_store.store(&commit).map_err(|e| {
-            error::RepositoryError::with_context("Failed commit-tree, could not store object", e)
-        })?;
+        self.object_store.store(&commit)?;
         Ok(commit.hash())
     }
 
@@ -279,12 +193,7 @@ impl Repository {
             .to_str()
             .ok_or_else(|| error::RepositoryError::PathName { path: abs.clone() })?;
 
-        let removed = self.index.remove(key).map_err(|e| {
-            error::RepositoryError::with_context(
-                "Failed command delete, could not remove file from index.",
-                e,
-            )
-        })?;
+        let removed = self.index.remove(key)?;
 
         if !removed {
             eprint!("warning: {key} is not tracked");
@@ -300,48 +209,30 @@ impl Repository {
 
         let tree_hash = self
             .work_tree
-            .build_tree_from_index(&self.index.map, &self.object_store)
-            .map_err(|e| {
-                error::RepositoryError::with_context(
-                    "Failed to create commit, could not build tree from index",
-                    e,
-                )
-            })?;
+            .build_tree_from_index(&self.index.map, &self.object_store)?;
 
-        let (user_name, user_email) = self.config.get().map_err(|e| {
-            error::RepositoryError::with_context(
-                "Failed to create commit, could not read user related fields from configuration",
-                e,
-            )
-        })?;
+        let (user_name, user_email) = self
+            .config
+            .get()
+            .map_err(|e| error::RepositoryError::Credentials(e))?;
 
-        let last = self.refs.head_commit().unwrap();
+        let last = self.refs.head_commit()?;
         let parent = (!last.is_empty()).then_some(last);
-
         let commit = Commit::new(tree_hash, user_name, user_email, parent, message);
-
-        self.object_store.store(&commit).map_err(|e| {
-            error::RepositoryError::with_context("Commit failed, could not store object", e)
-        })?;
-
+        self.object_store.store(&commit)?;
         let hash = commit.hash();
-
-        self.refs.update_head(&hash).unwrap();
-        self.index.clear().unwrap();
+        self.refs.update_head(&hash)?;
+        self.index.clear()?;
 
         Ok(hash)
     }
 
     pub fn log(&self, _reference: Option<String>) -> Result<()> {
         let mut current_hash = self.refs.head_commit().ok().filter(|s| !s.is_empty());
+
         while let Some(hash) = current_hash {
             self.cat(&hash)?;
-            let current = self.object_store.retrieve_object(&hash).map_err(|e| {
-                error::RepositoryError::with_context(
-                    "Log command failed, could not retrieve objects from object store",
-                    e,
-                )
-            })?;
+            let current = self.object_store.retrieve_object(&hash)?;
             if let Some(commit) = current.as_any().downcast_ref::<Commit>() {
                 current_hash = commit.parent_hash().map(String::from);
             } else {
@@ -353,25 +244,22 @@ impl Repository {
     }
 
     pub fn show_branches(&self) -> Result<String> {
-        let branches = self
-            .refs
-            .format_branches()
-            .map_err(|e| error::RepositoryError::with_context("Failed to show brances", e))?;
+        let branches = self.refs.format_branches()?;
         Ok(branches)
     }
 
     pub fn list_branches(&self) -> Result<Vec<String>> {
-        let branches = self
-            .refs
-            .list_branches()
-            .map_err(|e| error::RepositoryError::with_context("Failed to show branches.", e))?;
+        let branches = self.refs.list_branches()?;
         Ok(branches)
     }
 
     pub fn new_branch(&mut self, name: &str) -> Result<()> {
-        self.refs
-            .new_branch(name)
-            .map_err(|e| error::RepositoryError::with_context("Failed to create new branch.", e))?;
+        self.refs.new_branch(name)?;
+        Ok(())
+    }
+
+    pub fn delete_branch(&mut self, name: &str) -> Result<()> {
+        self.refs.delete_branch(name)?;
         Ok(())
     }
 
@@ -380,40 +268,14 @@ impl Repository {
             return Err(error::RepositoryError::UncommitedChanges);
         }
 
-        self.refs
-            .switch_branch(name)
-            .map_err(|e| error::RepositoryError::with_context("Switching branches failed.", e))?;
-
-        self.index.clear().map_err(|e| {
-            error::RepositoryError::with_context(
-                "Switching branches failed, could not clear index.",
-                e,
-            )
-        })?;
-
-        self.work_tree.clear().map_err(|e| {
-            error::RepositoryError::with_context(
-                "Switching branches failed, could not clear working tree.",
-                e,
-            )
-        })?;
-
-        let commit = self.refs.head_commit().map_err(|e| {
-            error::RepositoryError::with_context(
-                "Switching branches failed, could not resolve head for the new branch.",
-                e,
-            )
-        })?;
+        self.refs.switch_branch(name)?;
+        self.index.clear()?;
+        self.work_tree.clear()?;
+        let commit = self.refs.head_commit()?;
 
         if !commit.is_empty() {
             self.work_tree
-                .restore_from_commit(&commit, &self.object_store)
-                .map_err(|e| {
-                    error::RepositoryError::with_context(
-                        "Switching branches failed, could not restore worktree to match new branch",
-                        e,
-                    )
-                })?;
+                .restore_from_commit(&commit, &self.object_store)?
         }
 
         Ok(())

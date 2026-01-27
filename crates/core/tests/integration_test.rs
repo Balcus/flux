@@ -1,12 +1,13 @@
 use flux_core::{commands, internals::repository::Repository};
 use serial_test::serial;
 use std::fs;
+use flux_core::error;
 
 mod common;
 
 #[test]
 #[serial]
-fn project_creation_test() {
+fn project_creation() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
@@ -25,7 +26,7 @@ fn project_creation_test() {
 
 #[test]
 #[serial]
-fn init_test() {
+fn init() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
@@ -82,7 +83,7 @@ fn open_without_repo() {
 
 #[test]
 #[serial]
-fn set_test() {
+fn set() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
@@ -100,7 +101,7 @@ fn set_test() {
 
 #[test]
 #[serial]
-fn hash_object_test() {
+fn hash_object() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
@@ -124,7 +125,7 @@ fn hash_object_test() {
 
 #[test]
 #[serial]
-fn commit_test() {
+fn commit() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
@@ -269,9 +270,8 @@ fn commit_without_credentials() {
     repo.add("README.md").unwrap();
 
     let err = repo.commit("commit".to_string()).err().unwrap();
-
     match err {
-        flux_core::error::RepositoryError::Context { .. } => {},
+        flux_core::error::RepositoryError::Credentials { .. } => {}
         other => panic!("unexpected error: {other:?}"),
     }
 
@@ -280,7 +280,7 @@ fn commit_without_credentials() {
 
 #[test]
 #[serial]
-fn branching_test() {
+fn branching() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
@@ -361,5 +361,47 @@ fn branching_test() {
     );
 }
 
+#[test]
+#[serial]
+fn branching_errors() {
+    let (_temp, project_path) = common::setup_test_project();
+    let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
+    let mut repo = Repository::init(None, false).expect("Failed to initalize flux repository");
+    let res = repo.delete_branch("main");
+    let err = res
+        .err()
+        .expect("Expected error when deleting main branch, found Ok()");
+    assert!(matches!(err, error::RepositoryError::Refs(error::RefsError::DeleteCurrentBranch(..))));
+    println!("{err}");
 
+    let res = repo.switch_branch("does-not-exist", false);
+    let err = res
+        .err()
+        .expect("expected error when switching to non existent branch, found Ok()");
+    assert!(matches!(err, error::RepositoryError::Refs(error::RefsError::MissingBranch(..))));
+    println!("{err}");
+
+    let res = repo.new_branch("main");
+    let err = res
+        .err()
+        .expect("expected error when switching to non existent branch, found Ok()");
+    assert!(matches!(err, error::RepositoryError::Refs(error::RefsError::BranchAlreadyExists(..))));
+    println!("{err}");
+
+    fs::write(&repo.refs.head_path, "invalidate head").unwrap();
+    let res = repo.show_branches();
+    let err = res
+        .err()
+        .expect("expected error when switching to non existent branch, found Ok()");
+    assert!(matches!(err, error::RepositoryError::Refs(error::RefsError::InvalidHead{..})));
+    println!("{err}");
+
+    fs::remove_dir_all(repo.refs.refs_path).unwrap();
+    let res = Repository::open(None);
+    let err = res
+        .err()
+        .expect("expected error when opening repositroy after deleting refs folder but found Ok()");
+    assert!(matches!(err, error::RepositoryError::Refs(error::RefsError::Io(..))));
+    println!("{err}");
+}

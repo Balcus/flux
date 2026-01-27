@@ -70,7 +70,7 @@ pub enum Commands {
         #[arg(short = 'p')]
         pretty_print: bool,
 
-        #[arg(short = 'f', long = "force")]
+        #[arg(value_name = "object-hash")]
         object_hash: String,
     },
 

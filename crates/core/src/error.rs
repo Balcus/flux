@@ -1,6 +1,11 @@
 use hex::FromHexError;
-use std::{io, path::PathBuf};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
+
+use crate::utils;
 
 #[derive(Error, Debug)]
 pub enum IoError {
@@ -31,6 +36,57 @@ pub enum IoError {
 
     #[error("Failed to read metadata for '{}'. {source}", path.display())]
     Metadata { path: PathBuf, source: io::Error },
+}
+
+impl IoError {
+    pub fn read_error(path: impl AsRef<Path>, source: io::Error) -> Self {
+        IoError::Read {
+            path: utils::full_path(path),
+            source,
+        }
+    }
+
+    pub fn write_error(path: impl AsRef<Path>, source: io::Error) -> Self {
+        IoError::Write {
+            path: utils::full_path(path),
+            source,
+        }
+    }
+
+    pub fn create_error(path: impl AsRef<Path>, source: io::Error) -> Self {
+        IoError::Create {
+            path: utils::full_path(path),
+            source,
+        }
+    }
+
+    pub fn delete_error(path: impl AsRef<Path>, source: io::Error) -> Self {
+        IoError::Delete {
+            path: utils::full_path(path),
+            source,
+        }
+    }
+
+    pub fn missing_error(path: impl AsRef<Path>) -> Self {
+        IoError::Missing {
+            path: utils::full_path(path),
+        }
+    }
+
+    pub fn metadata_error(path: impl AsRef<Path>, source: io::Error) -> Self {
+        IoError::Metadata {
+            path: utils::full_path(path),
+            source,
+        }
+    }
+
+    pub fn rename_error(from: impl AsRef<Path>, to: impl AsRef<Path>,source: io::Error) -> Self {
+        IoError::Rename {
+            from: utils::full_path(from),
+            to: utils::full_path(to),
+            source,
+        }
+    }
 }
 
 #[derive(Error, Debug)]
@@ -118,10 +174,10 @@ pub enum RefsError {
     #[error("Invalid head format: {head}.")]
     InvalidHead { head: String },
 
-    #[error("Branch: '{0}' already exists.")]
+    #[error("Branch '{0}' already exists.")]
     BranchAlreadyExists(String),
 
-    #[error("Branch: '{0}' does not exist.")]
+    #[error("Branch '{0}' does not exist.")]
     MissingBranch(String),
 
     #[error("Cannot delete the current branch '{0}'. Switch to a different branch and try again.")]
@@ -137,7 +193,7 @@ pub enum RepositoryError {
     AlreadyInitialized(PathBuf),
 
     #[error("{context}. {source}")]
-    Context {
+    Other {
         context: &'static str,
         #[source]
         source: Box<dyn std::error::Error + Send + Sync>,
@@ -149,22 +205,40 @@ pub enum RepositoryError {
     #[error("Nothing to commit, index is empty.")]
     IndexEmpty,
 
-    #[error("Repository not initialized at: '{0}'. run 'flux init {0}' and try again.")]
+    #[error("Repository not initialized at: '{0}'. Run 'flux init {0}' and try again.")]
     NotRepository(PathBuf),
 
     #[error("There was an error trying to operate on path: '{}'.", path.display())]
     PathName { path: PathBuf },
 
     #[error("Repository has uncommited changes, commit them and try again or use the --force flag")]
-    UncommitedChanges
+    UncommitedChanges,
+
+    #[error("User credentials are not set. {0}")]
+    Credentials(ConfigError),
+
+    #[error("Object store error: {0}")]
+    ObjectStore(#[from] ObjectStoreError),
+
+    #[error("Configuration error: {0}")]
+    Configuration(#[from] ConfigError),
+
+    #[error("Refs error: {0}")]
+    Refs(#[from] RefsError),
+
+    #[error("Worktree error: {0}")]
+    WorkTree(#[from] WorkTreeError),
+
+    #[error("Index error: {0}")]
+    IndexError(#[from] IndexError),
 }
 
 impl RepositoryError {
-    pub fn with_context<E>(context: &'static str, err: E) -> Self
+    pub fn from<E>(context: &'static str, err: E) -> Self
     where
         E: std::error::Error + Send + Sync + 'static,
     {
-        RepositoryError::Context {
+        RepositoryError::Other {
             context,
             source: Box::new(err),
         }

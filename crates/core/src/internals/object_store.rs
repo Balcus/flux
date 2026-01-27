@@ -1,7 +1,3 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
 use crate::{
     error,
     objects::{
@@ -12,6 +8,10 @@ use crate::{
     },
     utils,
 };
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug)]
 pub struct ObjectStore {
@@ -21,17 +21,14 @@ pub struct ObjectStore {
 impl ObjectStore {
     pub fn new(flux_dir: &Path) -> Result<Self, error::ObjectStoreError> {
         let path = flux_dir.join("objects");
-        fs::create_dir(&path).map_err(|e| error::IoError::Create {
-            path: path.clone(),
-            source: e,
-        })?;
+        fs::create_dir(&path).map_err(|e| error::IoError::create_error(&path, e))?;
         Ok(Self { path })
     }
 
     pub fn load(flux_dir: &Path) -> Result<Self, error::ObjectStoreError> {
         let path = flux_dir.join("objects");
         if !path.exists() {
-            return Err(error::IoError::Missing { path: path.clone() }.into());
+            return Err(error::IoError::missing_error(&path).into());
         }
         Ok(Self { path })
     }
@@ -71,10 +68,8 @@ impl ObjectStore {
         let (dir, file) = object_hash.split_at(2);
         let object_path = self.path.join(dir).join(file);
 
-        let compressed_content = fs::read(&object_path).map_err(|e| error::IoError::Read {
-            path: object_path.clone(),
-            source: e,
-        })?;
+        let compressed_content =
+            fs::read(&object_path).map_err(|e| error::IoError::read_error(&object_path, e))?;
         let decompressed = utils::decompress(compressed_content);
 
         let null_pos = decompressed
@@ -147,22 +142,15 @@ impl ObjectStore {
     ) -> Result<(), error::ObjectStoreError> {
         let (dir, file) = hash.split_at(2);
         let object_dir = self.path.join(dir);
-        fs::create_dir_all(&object_dir).map_err(|e| error::IoError::Create {
-            path: object_dir,
-            source: e,
-        })?;
+        fs::create_dir_all(&object_dir)
+            .map_err(|e| error::IoError::create_error(&object_dir, e))?;
         let object_path = self.path.join(dir).join(file);
 
         let temp_path: std::path::PathBuf = object_path.with_extension("tmp");
-        fs::write(&temp_path, compressed_data).map_err(|e| error::IoError::Write {
-            path: object_path.clone(),
-            source: e,
-        })?;
-        fs::rename(&temp_path, &object_path).map_err(|e| error::IoError::Rename {
-            from: temp_path,
-            to: object_path,
-            source: e,
-        })?;
+        fs::write(&temp_path, compressed_data)
+            .map_err(|e| error::IoError::write_error(&object_dir, e))?;
+        fs::rename(&temp_path, &object_path)
+            .map_err(|e| error::IoError::rename_error(&temp_path, &object_path, e))?;
 
         Ok(())
     }
