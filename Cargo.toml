@@ -1,8 +1,9 @@
 [workspace]
 members = [
-    "crates/core",
-    "crates/cli",
-    "crates/desktop-app/src-tauri"
+    "crates/client/core",
+    "crates/client/cli",
+    "crates/client/desktop-app/src-tauri",
+    "crates/server"
 ]
 resolver = "2"
 
