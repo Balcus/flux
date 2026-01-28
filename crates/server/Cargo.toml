@@ -5,3 +5,5 @@ edition.workspace = true
 authors.workspace = true
 
 [dependencies]
+proto = { path = "../proto" }
+tonic = "0.12"

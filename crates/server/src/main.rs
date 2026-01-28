@@ -1,3 +1,5 @@
+use proto::models::ping_service_server::PingService;
+
 pub fn main() {
-    println!("server");
+    fn _assert_trait<T: PingService>() {}
 }
