@@ -130,5 +130,7 @@ pub enum Commands {
         subcommand: BranchCommands,
     },
 
-    Push {},
+    Push {
+        url: Option<String>
+    },
 }

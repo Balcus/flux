@@ -172,7 +172,15 @@ impl Repository {
         message: String,
         parent_hash: Option<String>,
     ) -> Result<String> {
-        let (user_name, user_email) = self.config.get()?;
+        let credentials = self.config.get_credential();
+
+        let user_name = credentials
+            .user_name
+            .ok_or_else(|| error::RepositoryError::Credentials())?;
+        let user_email = credentials
+            .user_email
+            .ok_or_else(|| error::RepositoryError::Credentials())?;
+
         let tree = self.object_store.retrieve_object(&tree_hash)?;
 
         if tree.object_type() != ObjectType::Tree {
@@ -215,10 +223,13 @@ impl Repository {
             .work_tree
             .build_tree_from_index(&self.index.map, &self.object_store)?;
 
-        let (user_name, user_email) = self
-            .config
-            .get()
-            .map_err(|e| error::RepositoryError::Credentials(e))?;
+        let credentials = self.config.get_credential();
+        let user_name = credentials
+            .user_name
+            .ok_or_else(|| error::RepositoryError::Credentials())?;
+        let user_email = credentials
+            .user_email
+            .ok_or_else(|| error::RepositoryError::Credentials())?;
 
         let last = self.refs.head_commit()?;
         let parent = (!last.is_empty()).then_some(last);
@@ -285,8 +296,18 @@ impl Repository {
         Ok(())
     }
 
-    pub async fn push(&self) -> Result<()> {
-        let mut client = GrpcClient::connect_remote("http://[::1]:50051".to_string())
+    pub async fn push(&mut self, url: Option<String>) -> Result<()> {
+        let url = match url {
+            Some(u) => u,
+            None => self
+                .config
+                .get("origin")
+                .map_err(|_| error::RepositoryError::MissingOrigin())?,
+        };
+
+        self.config.set("origin".to_string(), url.clone())?;
+
+        let mut client = GrpcClient::connect_remote(url)
             .await
             .map_err(|e| error::RepositoryError::from("Connection to remote failed.", e))?;
         let response = client

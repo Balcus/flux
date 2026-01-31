@@ -56,8 +56,8 @@ async fn main() -> anyhow::Result<()> {
                 commands::switch_branch(repo_path, name, force)?;
             }
         },
-        Commands::Push {} => {
-            commands::push(repo_path).await?;
+        Commands::Push {url} => {
+            commands::push(repo_path, url).await?;
         }
     }
 

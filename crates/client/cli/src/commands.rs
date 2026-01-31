@@ -82,8 +82,8 @@ pub fn switch_branch(repo_path: Option<String>, name: String, force: bool) -> an
     Ok(())
 }
 
-pub async fn push(repo_path: Option<String>) -> anyhow::Result<()> {
-    let repository = Repository::open(repo_path)?;
-    repository.push().await?;
+pub async fn push(repo_path: Option<String>, url: Option<String>) -> anyhow::Result<()> {
+    let mut repository = Repository::open(repo_path)?;
+    repository.push(url).await?;
     Ok(())
 }

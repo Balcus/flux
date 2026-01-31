@@ -80,7 +80,7 @@ impl IoError {
         }
     }
 
-    pub fn rename_error(from: impl AsRef<Path>, to: impl AsRef<Path>,source: io::Error) -> Self {
+    pub fn rename_error(from: impl AsRef<Path>, to: impl AsRef<Path>, source: io::Error) -> Self {
         IoError::Rename {
             from: utils::full_path(from),
             to: utils::full_path(to),
@@ -163,7 +163,10 @@ pub enum ConfigError {
     TomlFromString(#[from] toml::de::Error),
 
     #[error("The variable {0} must be set, try using 'flux set {0} ...'")]
-    NotSet(&'static str),
+    NotSet(String),
+
+    #[error("The field {0} is unsupported by the configuration.")]
+    UnsupportedField(String),
 }
 
 #[derive(Debug, Error)]
@@ -214,23 +217,28 @@ pub enum RepositoryError {
     #[error("Repository has uncommited changes, commit them and try again or use the --force flag")]
     UncommitedChanges,
 
-    #[error("User credentials are not set. {0}")]
-    Credentials(ConfigError),
+    #[error("User credentials are not set.")]
+    Credentials(),
 
-    #[error("Object store error: {0}")]
+    #[error(transparent)]
     ObjectStore(#[from] ObjectStoreError),
 
-    #[error("Configuration error: {0}")]
+    #[error(transparent)]
     Configuration(#[from] ConfigError),
 
-    #[error("Refs error: {0}")]
+    #[error(transparent)]
     Refs(#[from] RefsError),
 
-    #[error("Worktree error: {0}")]
+    #[error(transparent)]
     WorkTree(#[from] WorkTreeError),
 
-    #[error("Index error: {0}")]
+    #[error(transparent)]
     IndexError(#[from] IndexError),
+
+    #[error(
+        "Missing origin for remote repository. Specify it in the push command like 'flux push http://originurl' or set it in the config with 'flux set origin http://originurl'"
+    )]
+    MissingOrigin(),
 }
 
 #[derive(Debug, Error)]
@@ -239,11 +247,11 @@ pub enum GrpcClientError {
     ConnectRemote {
         url: String,
         #[source]
-        source: tonic::transport::Error
+        source: tonic::transport::Error,
     },
 
     #[error("Failed push to remote repoository. {0}")]
-    Push(#[from] tonic::Status)
+    Push(#[from] tonic::Status),
 }
 
 impl RepositoryError {

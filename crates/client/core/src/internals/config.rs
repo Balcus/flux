@@ -1,25 +1,62 @@
 use crate::error;
-use serde::Deserialize;
-use std::fs;
-use std::fs::{File, OpenOptions};
+use std::collections::HashMap;
+use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
+use std::str::FromStr;
+use std::{fmt, fs};
 
-// TODO: only allow the set of preset fileds and on get return a struct for them insted of tuple
-#[derive(Deserialize, Debug)]
-pub struct ConfigFields {
-    user_name: Option<String>,
-    user_email: Option<String>,
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub enum Field {
+    UserName,
+    UserEmail,
+    Origin,
+}
+
+impl FromStr for Field {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "user_name" => Ok(Field::UserName),
+            "user_email" => Ok(Field::UserEmail),
+            "origin" => Ok(Field::Origin),
+            _ => Err(()),
+        }
+    }
+}
+
+impl fmt::Display for Field {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            Field::UserName => "user_name",
+            Field::UserEmail => "user_email",
+            Field::Origin => "origin",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+pub struct Credentials {
+    pub user_name: Option<String>,
+    pub user_email: Option<String>,
 }
 
 #[derive(Debug)]
 pub struct Config {
     path: PathBuf,
-    pub user_name: Option<String>,
-    pub user_email: Option<String>,
+    pub map: HashMap<Field, Option<String>>,
 }
 
 impl Config {
+    pub fn empty_map() -> HashMap<Field, Option<String>> {
+        let mut map = HashMap::new();
+        for field in [Field::UserName, Field::UserEmail, Field::Origin] {
+            map.insert(field, None);
+        }
+        map
+    }
+
     pub fn default(path: impl Into<PathBuf>) -> Result<Self, error::ConfigError> {
         let path = path.into();
 
@@ -31,11 +68,12 @@ impl Config {
         writeln!(
             file,
             "\
-# Configuration file for git
-# Values can be set either by modifying the file or by using the set command.
+# Configuration file for flux
+# Values can be set either by directly modifying the file or by using the set command.
 #
 # user_name  =
-# user_email ="
+# user_email =
+# origin ="
         )
         .map_err(|e| error::IoError::Write {
             path: path.clone(),
@@ -44,8 +82,7 @@ impl Config {
 
         Ok(Self {
             path,
-            user_name: None,
-            user_email: None,
+            map: Self::empty_map(),
         })
     }
 
@@ -57,51 +94,72 @@ impl Config {
             source: e,
         })?;
 
-        let fields: ConfigFields =
+        let temp_map: HashMap<String, String> =
             toml::from_str(&content).map_err(|e| error::ConfigError::TomlFromString(e))?;
 
-        Ok(Self {
-            path,
-            user_name: fields.user_name,
-            user_email: fields.user_email,
-        })
+        let mut map = Self::empty_map();
+
+        for (key, value) in temp_map {
+            if let Ok(field) = key.parse::<Field>() {
+                map.insert(field, Some(value));
+            }
+        }
+
+        Ok(Self { path, map })
     }
 
     pub fn set(&mut self, key: String, value: String) -> Result<(), error::ConfigError> {
-        let mut file = OpenOptions::new()
-            .write(true)
-            .append(true)
-            .open(&self.path)
-            .map_err(|e| error::IoError::Open {
+        let field = key
+            .parse::<Field>()
+            .map_err(|_| error::ConfigError::UnsupportedField(key.clone()))?;
+
+        self.map.insert(field, Some(value));
+
+        let mut serializable_map = std::collections::HashMap::new();
+        for (k, v) in &self.map {
+            if let Some(val) = v {
+                serializable_map.insert(k.to_string(), val.clone());
+            }
+        }
+
+        let toml_string =
+            toml::to_string(&serializable_map).map_err(|e| error::IoError::Write {
                 path: self.path.clone(),
-                source: e,
+                source: std::io::Error::new(std::io::ErrorKind::InvalidData, e),
             })?;
 
-        writeln!(file, r#"{key} = "{value}""#).map_err(|e| error::IoError::Write {
+        let temp_path = self.path.with_extension("tmp");
+        std::fs::write(&temp_path, &toml_string).map_err(|e| error::IoError::Write {
+            path: temp_path.clone(),
+            source: e,
+        })?;
+
+        std::fs::rename(&temp_path, &self.path).map_err(|e| error::IoError::Write {
             path: self.path.clone(),
             source: e,
         })?;
 
-        match key.as_str() {
-            "user_name" => self.user_name = Some(value),
-            "user_email" => self.user_email = Some(value),
-            _ => {}
-        }
-
         Ok(())
     }
 
-    // this needs to change soon
-    pub fn get(&self) -> Result<(String, String), error::ConfigError> {
-        let user_name = self
-            .user_name
-            .clone()
-            .ok_or_else(|| error::ConfigError::NotSet("user_name"))?;
-        let user_email = self
-            .user_email
-            .clone()
-            .ok_or_else(|| error::ConfigError::NotSet("user_email"))?;
+    pub fn get_credential(&self) -> Credentials {
+        Credentials {
+            user_name: self.map.get(&Field::UserName).and_then(|v| v.clone()),
+            user_email: self.map.get(&Field::UserEmail).and_then(|v| v.clone()),
+        }
+    }
 
-        Ok((user_name.clone(), user_email.clone()))
+    pub fn get(&self, key: &str) -> Result<String, error::ConfigError> {
+        let field = &key
+            .parse::<Field>()
+            .map_err(|_| error::ConfigError::UnsupportedField(key.to_string()))?;
+
+        let val = self
+            .map
+            .get(&field)
+            .and_then(|v| v.clone())
+            .ok_or_else(|| error::ConfigError::NotSet(key.to_string()))?;
+
+        Ok(val)
     }
 }

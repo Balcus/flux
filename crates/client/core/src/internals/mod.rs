@@ -1,4 +1,4 @@
-mod config;
+pub mod config;
 mod index;
 pub mod repository;
 mod object_store;
