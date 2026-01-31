@@ -1,4 +1,4 @@
-use flux_core::{commands, internals::repository::Repository};
+use flux_core::internals::repository::Repository;
 use serial_test::serial;
 use std::fs;
 use flux_core::error;
@@ -87,10 +87,9 @@ fn set() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
-    Repository::init(None, false).unwrap();
-
-    commands::set(None, "user_name".to_string(), "user".to_string()).unwrap();
-    commands::set(None, "user_email".to_string(), "user@gmail.com".to_string()).unwrap();
+    let mut repo = Repository::init(None, false).unwrap();
+    repo.set("user_name".to_string(), "user".to_string()).unwrap();
+    repo.set("user_email".to_string(), "user@gmail.com".to_string()).unwrap();
 
     assert!(project_path.join(".flux/config").exists());
 
@@ -105,9 +104,9 @@ fn hash_object() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
-    Repository::init(None, false).unwrap();
+    let repo = Repository::init(None, false).unwrap();
 
-    let my_hash = commands::hash_object(None, "README.md".to_string(), false).unwrap();
+    let my_hash = repo.hash_object("README.md".to_string(), false).unwrap();
     let git_hash = common::git_hash_object("README.md").unwrap();
     assert_eq!(my_hash, git_hash);
     let object_path = project_path
@@ -115,11 +114,11 @@ fn hash_object() {
         .join(&git_hash[..2])
         .join(&git_hash[2..]);
     assert!(!object_path.exists());
-    let _ = commands::hash_object(None, "README.md".to_string(), true).unwrap();
+    let _ = repo.hash_object("README.md".to_string(), true).unwrap();
     assert!(object_path.exists());
 
     assert!(project_path.join("src").exists());
-    let my_hash = commands::hash_object(None, "src".to_string(), true).unwrap();
+    let my_hash = repo.hash_object("src".to_string(), true).unwrap();
     assert_eq!(my_hash, "ac715a76cc52acc719def812525f6ae57b4770a9");
 }
 
