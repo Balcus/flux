@@ -1,4 +1,4 @@
-use crate::internals::repository::Repository;
+use flux_core::internals::repository::Repository;
 
 pub fn set(repo_path: Option<String>, key: String, value: String) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
@@ -79,5 +79,11 @@ pub fn delete_branch(repo_path: Option<String>, name: String) -> anyhow::Result<
 pub fn switch_branch(repo_path: Option<String>, name: String, force: bool) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
     repository.switch_branch(&name, force)?;
+    Ok(())
+}
+
+pub async fn push(repo_path: Option<String>) -> anyhow::Result<()> {
+    let repository = Repository::open(repo_path)?;
+    repository.push().await?;
     Ok(())
 }

@@ -2,14 +2,21 @@ syntax = "proto3";
 
 package models;
 
-service PingService {
-  rpc Ping (PingRequest) returns (PingResponse);
+service PushService {
+  rpc Push(stream Chunk) returns (UploadStatus) {}
 }
 
-message PingRequest {
-  string message = 1;
+enum UploadStatusCode {
+  UNKNOWN = 0;
+  OK = 1;
+  FAILED = 2;
 }
 
-message PingResponse {
-  string message = 1;
+message Chunk {
+  bytes content = 1;
+}
+
+message UploadStatus {
+  string response_message = 1;
+  UploadStatusCode code = 2;
 }

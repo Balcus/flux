@@ -233,6 +233,19 @@ pub enum RepositoryError {
     IndexError(#[from] IndexError),
 }
 
+#[derive(Debug, Error)]
+pub enum GrpcClientError {
+    #[error("Failed to connect to remote repository at '{url}'. {source}")]
+    ConnectRemote {
+        url: String,
+        #[source]
+        source: tonic::transport::Error
+    },
+
+    #[error("Failed push to remote repoository. {0}")]
+    Push(#[from] tonic::Status)
+}
+
 impl RepositoryError {
     pub fn from<E>(context: &'static str, err: E) -> Self
     where

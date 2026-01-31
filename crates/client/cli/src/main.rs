@@ -1,10 +1,12 @@
 use crate::cli::{BranchCommands, Cli, Commands};
 use clap::Parser;
-use flux_core::{commands, internals::repository::Repository};
+use flux_core::internals::repository::Repository;
 
 pub mod cli;
+pub mod commands;
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let repo_path = cli.repo_path.clone();
 
@@ -54,6 +56,9 @@ fn main() -> anyhow::Result<()> {
                 commands::switch_branch(repo_path, name, force)?;
             }
         },
+        Commands::Push {} => {
+            commands::push(repo_path).await?;
+        }
     }
 
     Ok(())

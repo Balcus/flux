@@ -1,5 +1,6 @@
 use crate::error;
 use crate::internals::config::Config;
+use crate::internals::grpc_client::GrpcClient;
 use crate::internals::index::Index;
 use crate::internals::object_store::ObjectStore;
 use crate::internals::refs::Refs;
@@ -77,7 +78,8 @@ impl Repository {
         let flux_dir = work_tree_path.join(".flux");
 
         if flux_dir.exists() && force {
-            fs::remove_dir_all(&flux_dir).map_err(|e| error::IoError::delete_error(&flux_dir, e))?;
+            fs::remove_dir_all(&flux_dir)
+                .map_err(|e| error::IoError::delete_error(&flux_dir, e))?;
         } else if flux_dir.exists() && !force {
             let abs = flux_dir.canonicalize().unwrap_or_else(|_| flux_dir.clone());
             return Err(error::RepositoryError::AlreadyInitialized(abs));
@@ -140,7 +142,9 @@ impl Repository {
 
     pub fn hash_object(&self, path: String, write: bool) -> Result<String> {
         let full_path = self.work_tree.path().join(&path);
-        let metadata = full_path.metadata().map_err(|e| error::IoError::metadata_error(&full_path, e))?;
+        let metadata = full_path
+            .metadata()
+            .map_err(|e| error::IoError::metadata_error(&full_path, e))?;
         let object: Box<dyn FluxObject>;
         if metadata.is_file() {
             object = Box::new(Blob::new(&full_path));
@@ -277,6 +281,21 @@ impl Repository {
             self.work_tree
                 .restore_from_commit(&commit, &self.object_store)?
         }
+
+        Ok(())
+    }
+
+    pub async fn push(&self) -> Result<()> {
+        let mut client = GrpcClient::connect_remote("http://[::1]:50051".to_string())
+            .await
+            .map_err(|e| error::RepositoryError::from("Connection to remote failed.", e))?;
+        let response = client
+            .push()
+            .await
+            .map_err(|e| error::RepositoryError::from("Failed to push to remote", e))?;
+
+        println!("Server response: {}", response.response_message);
+        println!("Status code: {}", response.code);
 
         Ok(())
     }

@@ -54,11 +54,14 @@ pub enum Commands {
 
         #[arg(short = 'f', long = "force", default_value_t = false)]
         // If enabled will delete the previous .flux directory and will create a new one
-        force: bool
+        force: bool,
     },
 
     /// Set a configuration value
-    Set { key: String, value: String },
+    Set {
+        key: String,
+        value: String,
+    },
 
     /// Display the contents of a repository object
     ///
@@ -87,10 +90,14 @@ pub enum Commands {
     },
 
     /// Add a file or directory to the staging area
-    Add { path: String },
+    Add {
+        path: String,
+    },
 
     /// Remove a file or directory from the staging area
-    Delete { path: String },
+    Delete {
+        path: String,
+    },
 
     /// Create a commit object from a tree
     ///
@@ -122,4 +129,6 @@ pub enum Commands {
         #[command(subcommand)]
         subcommand: BranchCommands,
     },
+
+    Push {},
 }
