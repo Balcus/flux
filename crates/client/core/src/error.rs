@@ -217,8 +217,8 @@ pub enum RepositoryError {
     #[error("Repository has uncommited changes, commit them and try again or use the --force flag")]
     UncommitedChanges,
 
-    #[error("User credentials are not set.")]
-    Credentials(),
+    #[error("User credentials are not set. {0}")]
+    Credentials(#[source] ConfigError),
 
     #[error(transparent)]
     ObjectStore(#[from] ObjectStoreError),
@@ -239,6 +239,12 @@ pub enum RepositoryError {
         "Missing origin for remote repository. Specify it in the push command like 'flux push http://originurl' or set it in the config with 'flux set origin http://originurl'"
     )]
     MissingOrigin(),
+
+    #[error("Failed to archive flux repository")]
+    Archive(#[from] std::io::Error),
+
+    #[error(transparent)]
+    Grpc(#[from] GrpcClientError)
 }
 
 #[derive(Debug, Error)]
@@ -251,7 +257,17 @@ pub enum GrpcClientError {
     },
 
     #[error("Failed push to remote repoository. {0}")]
-    Push(#[from] tonic::Status),
+    Push(#[source] tonic::Status),
+
+    #[error("Failed to parse url: '{url}'.")]
+    Url {
+        url: String,
+        #[source]
+        source: Option<url::ParseError>,
+    },
+
+    #[error("Failed to clone repository.{0}")]
+    Clone(#[source] tonic::Status)
 }
 
 impl RepositoryError {

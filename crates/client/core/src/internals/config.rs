@@ -38,8 +38,8 @@ impl fmt::Display for Field {
 }
 
 pub struct Credentials {
-    pub user_name: Option<String>,
-    pub user_email: Option<String>,
+    pub user_name: String,
+    pub user_email: String,
 }
 
 #[derive(Debug)]
@@ -142,11 +142,20 @@ impl Config {
         Ok(())
     }
 
-    pub fn get_credential(&self) -> Credentials {
-        Credentials {
-            user_name: self.map.get(&Field::UserName).and_then(|v| v.clone()),
-            user_email: self.map.get(&Field::UserEmail).and_then(|v| v.clone()),
-        }
+    fn get_required(
+        &self,
+        field: Field,
+    ) -> Result<String, error::ConfigError> {
+        self.map.get(&field)
+            .and_then(|v| v.clone())
+            .ok_or_else(|| error::ConfigError::NotSet(field.to_string()))
+    }
+
+    pub fn get_credential(&self) -> Result<Credentials, error::ConfigError> {
+        Ok(Credentials {
+            user_name: self.get_required(Field::UserName)?,
+            user_email: self.get_required(Field::UserEmail)?,
+        })
     }
 
     pub fn get(&self, key: &str) -> Result<String, error::ConfigError> {

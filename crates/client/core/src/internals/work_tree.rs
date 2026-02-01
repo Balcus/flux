@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 pub struct WorkTree {
     path: PathBuf,
 }
-
+// TODO: operations like switch branch currently fail if there is binary data inside the work tree when doing a commit
 #[derive(Debug)]
 enum TreeNode {
     File(String),

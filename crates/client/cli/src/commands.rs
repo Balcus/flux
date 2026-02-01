@@ -87,3 +87,14 @@ pub async fn push(repo_path: Option<String>, url: Option<String>) -> anyhow::Res
     repository.push(url).await?;
     Ok(())
 }
+
+pub fn restore_fs(repo_path: Option<String>) -> anyhow::Result<()> {
+    let repository = Repository::open(repo_path)?;
+    repository.restore_fs()?;
+    Ok(())
+}
+
+pub async fn clone(url: String, path: Option<String>) -> anyhow::Result<()> {
+    let _repository = Repository::clone(url, path).await?;
+    Ok(())
+}

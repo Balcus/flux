@@ -6,6 +6,10 @@ service PushService {
   rpc Push(stream Chunk) returns (UploadStatus) {}
 }
 
+service CloneService {
+  rpc CloneRepository(CloneRequest) returns (stream Chunk) {}
+}
+
 enum UploadStatusCode {
   UNKNOWN = 0;
   OK = 1;
@@ -13,10 +17,15 @@ enum UploadStatusCode {
 }
 
 message Chunk {
-  bytes content = 1;
+  string repo_name = 1;
+  bytes content = 2;
 }
 
 message UploadStatus {
   string response_message = 1;
   UploadStatusCode code = 2;
+}
+
+message CloneRequest {
+  string name = 1;
 }

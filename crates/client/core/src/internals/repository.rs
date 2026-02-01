@@ -1,3 +1,8 @@
+use flate2::Compression;
+use flate2::read::GzDecoder;
+use flate2::write::GzEncoder;
+use tar::Archive;
+
 use crate::error;
 use crate::internals::config::Config;
 use crate::internals::grpc_client::GrpcClient;
@@ -10,12 +15,14 @@ use crate::objects::commit::Commit;
 use crate::objects::object_type::{FluxObject, ObjectType};
 use crate::objects::tree::Tree;
 use std::fs;
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
 pub type Result<T> = std::result::Result<T, error::RepositoryError>;
 
 #[derive(Debug)]
 pub struct Repository {
+    pub name: String,
     pub refs: Refs,
     pub work_tree: WorkTree,
     pub flux_dir: PathBuf,
@@ -75,6 +82,19 @@ impl Repository {
         let work_tree_path = path
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
+
+        let work_tree_path = work_tree_path
+            .canonicalize()
+            .map_err(|e| error::IoError::metadata_error(&work_tree_path, e))?;
+
+        let repo_name = work_tree_path
+            .file_name()
+            .ok_or_else(|| error::RepositoryError::PathName {
+                path: work_tree_path.clone(),
+            })?
+            .to_string_lossy()
+            .to_string();
+
         let flux_dir = work_tree_path.join(".flux");
 
         if flux_dir.exists() && force {
@@ -100,6 +120,7 @@ impl Repository {
             flux_dir,
             config,
             refs,
+            name: repo_name,
         };
 
         Ok(repo)
@@ -109,6 +130,18 @@ impl Repository {
         let work_tree_path = path
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("."));
+
+        let work_tree_path = work_tree_path
+            .canonicalize()
+            .map_err(|e| error::IoError::metadata_error(&work_tree_path, e))?;
+
+        let repo_name = work_tree_path
+            .file_name()
+            .ok_or_else(|| error::RepositoryError::PathName {
+                path: work_tree_path.clone(),
+            })?
+            .to_string_lossy()
+            .to_string();
 
         let store_dir = work_tree_path.join(".flux");
 
@@ -132,7 +165,28 @@ impl Repository {
             flux_dir: store_dir,
             config,
             index,
+            name: repo_name,
         })
+    }
+
+    fn dearchive(archive_bytes: Vec<u8>, output_dir: &Path) -> Result<()> {
+        fs::create_dir_all(output_dir)?;
+        let cursor = Cursor::new(archive_bytes);
+        let decoder = GzDecoder::new(cursor);
+        let mut archive = Archive::new(decoder);
+        archive.unpack(output_dir)?;
+        Ok(())
+    }
+
+    pub async fn clone(url: String, path: Option<String>) -> Result<Self> {
+        let mut clinet = GrpcClient::connect_remote(url).await?;
+        let archive = clinet.clone_repository().await?;
+        let repo_path = path.clone().unwrap_or(".".to_string());
+        let output_dir = PathBuf::from(repo_path).join(".flux");
+        Self::dearchive(archive, &output_dir)?;
+        let repository = Self::open(path)?;
+        repository.restore_fs()?;
+        Ok(repository)
     }
 
     pub fn set(&mut self, key: String, value: String) -> Result<()> {
@@ -172,14 +226,13 @@ impl Repository {
         message: String,
         parent_hash: Option<String>,
     ) -> Result<String> {
-        let credentials = self.config.get_credential();
+        let credentials = self
+            .config
+            .get_credential()
+            .map_err(|e| error::RepositoryError::Credentials(e))?;
 
-        let user_name = credentials
-            .user_name
-            .ok_or_else(|| error::RepositoryError::Credentials())?;
-        let user_email = credentials
-            .user_email
-            .ok_or_else(|| error::RepositoryError::Credentials())?;
+        let user_name = credentials.user_name;
+        let user_email = credentials.user_email;
 
         let tree = self.object_store.retrieve_object(&tree_hash)?;
 
@@ -223,13 +276,12 @@ impl Repository {
             .work_tree
             .build_tree_from_index(&self.index.map, &self.object_store)?;
 
-        let credentials = self.config.get_credential();
-        let user_name = credentials
-            .user_name
-            .ok_or_else(|| error::RepositoryError::Credentials())?;
-        let user_email = credentials
-            .user_email
-            .ok_or_else(|| error::RepositoryError::Credentials())?;
+        let credentials = self
+            .config
+            .get_credential()
+            .map_err(|e| error::RepositoryError::Credentials(e))?;
+        let user_name = credentials.user_name;
+        let user_email = credentials.user_email;
 
         let last = self.refs.head_commit()?;
         let parent = (!last.is_empty()).then_some(last);
@@ -296,7 +348,9 @@ impl Repository {
         Ok(())
     }
 
+    //TODO: before pushing make sure the user credentials are removed, maybe excluding the whole configuration would actually work better
     pub async fn push(&mut self, url: Option<String>) -> Result<()> {
+        let content = self.archive()?;
         let url = match url {
             Some(u) => u,
             None => self
@@ -311,13 +365,41 @@ impl Repository {
             .await
             .map_err(|e| error::RepositoryError::from("Connection to remote failed.", e))?;
         let response = client
-            .push()
+            .push(self.name.clone(), content)
             .await
             .map_err(|e| error::RepositoryError::from("Failed to push to remote", e))?;
 
         println!("Server response: {}", response.response_message);
         println!("Status code: {}", response.code);
 
+        Ok(())
+    }
+
+    fn archive(&self) -> Result<Vec<u8>> {
+        let flux_dir = self
+            .flux_dir
+            .canonicalize()
+            .map_err(|e| error::RepositoryError::Archive(e))?;
+
+        let mut buf: Vec<u8> = Vec::new();
+        let gz = GzEncoder::new(&mut buf, Compression::default());
+        let mut tar = tar::Builder::new(gz);
+
+        tar.append_dir_all(".", flux_dir)
+            .map_err(|e| error::RepositoryError::Archive(e))?;
+
+        tar.into_inner()
+            .map_err(|e| error::RepositoryError::Archive(e))?
+            .finish()
+            .map_err(|e| error::RepositoryError::Archive(e))?;
+
+        Ok(buf)
+    }
+
+    pub fn restore_fs(&self) -> Result<()> {
+        let last_commit = self.refs.head_commit()?;
+        self.work_tree
+            .restore_from_commit(&last_commit, &self.object_store)?;
         Ok(())
     }
 }

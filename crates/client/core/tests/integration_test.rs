@@ -1,7 +1,7 @@
+use flux_core::error;
 use flux_core::internals::repository::Repository;
 use serial_test::serial;
 use std::fs;
-use flux_core::error;
 
 mod common;
 
@@ -88,8 +88,10 @@ fn set() {
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
     let mut repo = Repository::init(None, false).unwrap();
-    repo.set("user_name".to_string(), "user".to_string()).unwrap();
-    repo.set("user_email".to_string(), "user@gmail.com".to_string()).unwrap();
+    repo.set("user_name".to_string(), "user".to_string())
+        .unwrap();
+    repo.set("user_email".to_string(), "user@gmail.com".to_string())
+        .unwrap();
 
     assert!(project_path.join(".flux/config").exists());
 
@@ -371,21 +373,30 @@ fn branching_errors() {
     let err = res
         .err()
         .expect("Expected error when deleting main branch, found Ok()");
-    assert!(matches!(err, error::RepositoryError::Refs(error::RefsError::DeleteCurrentBranch(..))));
+    assert!(matches!(
+        err,
+        error::RepositoryError::Refs(error::RefsError::DeleteCurrentBranch(..))
+    ));
     println!("{err}");
 
     let res = repo.switch_branch("does-not-exist", false);
     let err = res
         .err()
         .expect("expected error when switching to non existent branch, found Ok()");
-    assert!(matches!(err, error::RepositoryError::Refs(error::RefsError::MissingBranch(..))));
+    assert!(matches!(
+        err,
+        error::RepositoryError::Refs(error::RefsError::MissingBranch(..))
+    ));
     println!("{err}");
 
     let res = repo.new_branch("main");
     let err = res
         .err()
         .expect("expected error when switching to non existent branch, found Ok()");
-    assert!(matches!(err, error::RepositoryError::Refs(error::RefsError::BranchAlreadyExists(..))));
+    assert!(matches!(
+        err,
+        error::RepositoryError::Refs(error::RefsError::BranchAlreadyExists(..))
+    ));
     println!("{err}");
 
     fs::write(&repo.refs.head_path, "invalidate head").unwrap();
@@ -393,7 +404,10 @@ fn branching_errors() {
     let err = res
         .err()
         .expect("expected error when switching to non existent branch, found Ok()");
-    assert!(matches!(err, error::RepositoryError::Refs(error::RefsError::InvalidHead{..})));
+    assert!(matches!(
+        err,
+        error::RepositoryError::Refs(error::RefsError::InvalidHead { .. })
+    ));
     println!("{err}");
 
     fs::remove_dir_all(repo.refs.refs_path).unwrap();
@@ -401,6 +415,9 @@ fn branching_errors() {
     let err = res
         .err()
         .expect("expected error when opening repositroy after deleting refs folder but found Ok()");
-    assert!(matches!(err, error::RepositoryError::Refs(error::RefsError::Io(..))));
+    assert!(matches!(
+        err,
+        error::RepositoryError::Refs(error::RefsError::Io(..))
+    ));
     println!("{err}");
 }
