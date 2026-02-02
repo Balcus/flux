@@ -131,14 +131,12 @@ pub enum Commands {
     },
 
     Push {
-        url: Option<String>
+        url: Option<String>,
     },
 
-    RestoreFs {
-
-    },
-     Clone {
+    RestoreFs {},
+    Clone {
         url: String,
-        path: Option<String>
-     }
+        path: Option<String>,
+    },
 }

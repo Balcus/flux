@@ -1,13 +1,13 @@
+use crate::cli::Cli;
+use crate::services::clone_service::FluxCloneService;
+use crate::services::push_service::FluxPushService;
 use clap::Parser;
 use proto::models::clone_service_server::CloneServiceServer;
 use proto::models::push_service_server::PushServiceServer;
 use tonic::transport::Server;
-use crate::cli::Cli;
-use crate::services::clone_service::FluxCloneService;
-use crate::services::push_service::FluxPushService;
 
-mod services;
 mod cli;
+mod services;
 
 // TODO: cleanup, auth, cli with args to run server
 // figure out how to test?!

@@ -23,7 +23,7 @@ impl ObjectType {
             Self::Blob => "blob",
             Self::Tree => "tree",
             Self::Commit => "commit",
-            Self::Tag => "tag"
+            Self::Tag => "tag",
         }
     }
 }

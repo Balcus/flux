@@ -41,20 +41,20 @@ impl Commit {
         )
         .as_bytes()
         .to_owned();
-        
+
         Self {
             content,
             parent_hash,
-            tree_hash: tree_hash,
+            tree_hash,
         }
     }
-    
+
     pub fn from_content(content: Vec<u8>) -> Self {
         let content_str = String::from_utf8_lossy(&content);
-        
+
         let mut tree_hash = String::new();
         let mut parent_hash = None;
-        
+
         for line in content_str.lines() {
             if line.starts_with("tree ") {
                 tree_hash = line.strip_prefix("tree ").unwrap_or("").to_string();
@@ -62,19 +62,18 @@ impl Commit {
                 parent_hash = Some(line.strip_prefix("parent ").unwrap_or("").to_string());
             }
         }
-        
+
         Self {
             content,
             parent_hash,
             tree_hash,
         }
     }
-    
+
     pub fn to_string(&self) -> String {
-        String::from_utf8(self.content.clone())
-            .expect("Could not convert commit content to string")
+        String::from_utf8(self.content.clone()).expect("Could not convert commit content to string")
     }
-    
+
     pub fn parent_hash(&self) -> Option<&str> {
         self.parent_hash.as_deref()
     }
@@ -84,7 +83,7 @@ impl FluxObject for Commit {
     fn object_type(&self) -> ObjectType {
         ObjectType::Commit
     }
-    
+
     fn hash(&self) -> String {
         let header = format!("commit {}\0", self.content.len());
         let mut full = Vec::new();
@@ -92,7 +91,7 @@ impl FluxObject for Commit {
         full.extend_from_slice(&self.content);
         utils::hash(&full)
     }
-    
+
     fn serialize(&self) -> Vec<u8> {
         let header = format!("commit {}\0", self.content.len());
         let mut full = Vec::new();
@@ -100,7 +99,7 @@ impl FluxObject for Commit {
         full.extend_from_slice(&self.content);
         utils::compress(&full)
     }
-    
+
     fn print(&self) {
         println!("{}", self.to_string())
     }

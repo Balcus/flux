@@ -244,7 +244,7 @@ pub enum RepositoryError {
     Archive(#[from] std::io::Error),
 
     #[error(transparent)]
-    Grpc(#[from] GrpcClientError)
+    Grpc(#[from] GrpcClientError),
 }
 
 #[derive(Debug, Error)]
@@ -267,7 +267,7 @@ pub enum GrpcClientError {
     },
 
     #[error("Failed to clone repository.{0}")]
-    Clone(#[source] tonic::Status)
+    Clone(#[source] tonic::Status),
 }
 
 impl RepositoryError {

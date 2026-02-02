@@ -56,12 +56,12 @@ async fn main() -> anyhow::Result<()> {
                 commands::switch_branch(repo_path, name, force)?;
             }
         },
-        Commands::Push {url} => {
+        Commands::Push { url } => {
             commands::push(repo_path, url).await?;
-        },
+        }
         Commands::RestoreFs {} => {
             commands::restore_fs(repo_path)?;
-        },
+        }
         Commands::Clone { url, path } => {
             commands::clone(url, path).await?;
         }

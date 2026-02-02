@@ -71,7 +71,7 @@ impl WorkTree {
         let commit = commit_obj
             .as_any()
             .downcast_ref::<Commit>()
-            .ok_or_else(|| error::WorkTreeError::Downcast { expected: "commit" })?;
+            .ok_or(error::WorkTreeError::Downcast { expected: "commit" })?;
         let tree_hash = &commit.tree_hash;
         self.restore_tree(tree_hash, &self.path, object_store)?;
 
@@ -89,7 +89,7 @@ impl WorkTree {
         let tree = tree_obj
             .as_any()
             .downcast_ref::<Tree>()
-            .ok_or_else(|| error::WorkTreeError::Downcast { expected: "tree" })?;
+            .ok_or(error::WorkTreeError::Downcast { expected: "tree" })?;
 
         let entries = tree.entries();
 
@@ -108,7 +108,7 @@ impl WorkTree {
                 let blob = blob_obj
                     .as_any()
                     .downcast_ref::<Blob>()
-                    .ok_or_else(|| error::WorkTreeError::Downcast { expected: "blob" })?;
+                    .ok_or(error::WorkTreeError::Downcast { expected: "blob" })?;
 
                 let blob_content = blob.to_string();
                 fs::write(&target_path, blob_content.as_bytes()).map_err(|e| {
@@ -145,12 +145,10 @@ impl WorkTree {
                     if let TreeNode::Dir(map) = current {
                         map.insert(part.to_string(), TreeNode::File(hash.clone()));
                     }
-                } else {
-                    if let TreeNode::Dir(map) = current {
-                        current = map
-                            .entry(part.to_string())
-                            .or_insert_with(|| TreeNode::Dir(HashMap::new()));
-                    }
+                } else if let TreeNode::Dir(map) = current {
+                    current = map
+                        .entry(part.to_string())
+                        .or_insert_with(|| TreeNode::Dir(HashMap::new()));
                 }
             }
         }

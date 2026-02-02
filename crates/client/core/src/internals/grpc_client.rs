@@ -46,12 +46,13 @@ impl GrpcClient {
             url: self.url.clone(),
             source: Some(e),
         })?;
-        let repo_name = url.path_segments().and_then(|p| p.last()).ok_or_else(|| {
-            error::GrpcClientError::Url {
+        let repo_name = url
+            .path_segments()
+            .and_then(|mut p| p.next_back())
+            .ok_or_else(|| error::GrpcClientError::Url {
                 url: self.url.clone(),
                 source: None,
-            }
-        })?;
+            })?;
         Ok(repo_name.to_string())
     }
 
@@ -79,7 +80,7 @@ impl GrpcClient {
             .push_client
             .push(request)
             .await
-            .map_err(|e| error::GrpcClientError::Push(e))?;
+            .map_err(error::GrpcClientError::Push)?;
         Ok(response.into_inner())
     }
 
@@ -92,7 +93,7 @@ impl GrpcClient {
             .clone_client
             .clone_repository(request)
             .await
-            .map_err(|e| error::GrpcClientError::Clone(e))?
+            .map_err(error::GrpcClientError::Clone)?
             .into_inner();
 
         let mut content = Vec::new();
@@ -100,7 +101,7 @@ impl GrpcClient {
         while let Some(chunk) = stream
             .message()
             .await
-            .map_err(|e| error::GrpcClientError::Clone(e))?
+            .map_err(error::GrpcClientError::Clone)?
         {
             content.extend_from_slice(&chunk.content);
         }

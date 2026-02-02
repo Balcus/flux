@@ -57,7 +57,7 @@ impl Repository {
     }
 
     fn add_file(&mut self, path: &Path) -> Result<()> {
-        let blob = Blob::new(&path);
+        let blob = Blob::new(path);
         self.object_store.store(&blob)?;
 
         let rel_path = path.strip_prefix(self.work_tree.path()).map_err(|e| {
@@ -109,7 +109,7 @@ impl Repository {
 
         let object_store = ObjectStore::new(&flux_dir)?;
         let refs = Refs::new(&flux_dir)?;
-        let config = Config::default(&flux_dir.join("config"))?;
+        let config = Config::default(flux_dir.join("config"))?;
         let index = Index::new(&flux_dir)?;
         let work_tree = WorkTree::new(work_tree_path);
 
@@ -229,7 +229,7 @@ impl Repository {
         let credentials = self
             .config
             .get_credential()
-            .map_err(|e| error::RepositoryError::Credentials(e))?;
+            .map_err(error::RepositoryError::Credentials)?;
 
         let user_name = credentials.user_name;
         let user_email = credentials.user_email;
@@ -279,7 +279,7 @@ impl Repository {
         let credentials = self
             .config
             .get_credential()
-            .map_err(|e| error::RepositoryError::Credentials(e))?;
+            .map_err(error::RepositoryError::Credentials)?;
         let user_name = credentials.user_name;
         let user_email = credentials.user_email;
 
@@ -379,19 +379,19 @@ impl Repository {
         let flux_dir = self
             .flux_dir
             .canonicalize()
-            .map_err(|e| error::RepositoryError::Archive(e))?;
+            .map_err(error::RepositoryError::Archive)?;
 
         let mut buf: Vec<u8> = Vec::new();
         let gz = GzEncoder::new(&mut buf, Compression::default());
         let mut tar = tar::Builder::new(gz);
 
         tar.append_dir_all(".", flux_dir)
-            .map_err(|e| error::RepositoryError::Archive(e))?;
+            .map_err(error::RepositoryError::Archive)?;
 
         tar.into_inner()
-            .map_err(|e| error::RepositoryError::Archive(e))?
+            .map_err(error::RepositoryError::Archive)?
             .finish()
-            .map_err(|e| error::RepositoryError::Archive(e))?;
+            .map_err(error::RepositoryError::Archive)?;
 
         Ok(buf)
     }

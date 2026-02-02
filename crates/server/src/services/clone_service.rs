@@ -36,9 +36,7 @@ impl CloneService for FluxCloneService {
         let chunk_size = self.chunk_size;
 
         tokio::spawn(async move {
-            let uploads_path = PathBuf::from(upload_root)
-                .join(&name)
-                .join(".flux.tar.gz");
+            let uploads_path = PathBuf::from(upload_root).join(&name).join(".flux.tar.gz");
             let bytes = match tokio::fs::read(&uploads_path).await {
                 Ok(b) => b,
                 Err(e) => {

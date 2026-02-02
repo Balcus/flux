@@ -1,6 +1,5 @@
 use flux_core::utils::{compress, decompress, hash};
 
-
 #[test]
 fn hash_empty_data() {
     let data = b"".to_vec();
@@ -49,7 +48,9 @@ fn compress_decompress_simple_string() {
 
 #[test]
 fn compress_decompress_large_text() {
-    let data = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(100).into_bytes();
+    let data = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
+        .repeat(100)
+        .into_bytes();
     let compressed = compress(&data);
     let decompressed = decompress(compressed.clone());
     assert_eq!(data, decompressed);

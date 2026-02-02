@@ -95,7 +95,7 @@ impl Config {
         })?;
 
         let temp_map: HashMap<String, String> =
-            toml::from_str(&content).map_err(|e| error::ConfigError::TomlFromString(e))?;
+            toml::from_str(&content).map_err(error::ConfigError::TomlFromString)?;
 
         let mut map = Self::empty_map();
 
@@ -142,11 +142,9 @@ impl Config {
         Ok(())
     }
 
-    fn get_required(
-        &self,
-        field: Field,
-    ) -> Result<String, error::ConfigError> {
-        self.map.get(&field)
+    fn get_required(&self, field: Field) -> Result<String, error::ConfigError> {
+        self.map
+            .get(&field)
             .and_then(|v| v.clone())
             .ok_or_else(|| error::ConfigError::NotSet(field.to_string()))
     }
@@ -165,7 +163,7 @@ impl Config {
 
         let val = self
             .map
-            .get(&field)
+            .get(field)
             .and_then(|v| v.clone())
             .ok_or_else(|| error::ConfigError::NotSet(key.to_string()))?;
 

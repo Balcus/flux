@@ -304,13 +304,13 @@ fn branching() {
             .expect("Could not read current branch name"),
         "main"
     );
-    let head_content = fs::read_to_string(&repo.flux_dir.join(&repo.refs.head_ref().unwrap()))
+    let head_content = fs::read_to_string(repo.flux_dir.join(repo.refs.head_ref().unwrap()))
         .expect("Could not read HEAD content");
     assert_eq!(head_content, first_commit_hash);
 
     repo.new_branch("feature").unwrap();
-    assert!(fs::exists(&repo.flux_dir.join("refs/heads/feature")).unwrap());
-    let feature_content = fs::read_to_string(&repo.flux_dir.join("refs/heads/feature")).unwrap();
+    assert!(fs::exists(repo.flux_dir.join("refs/heads/feature")).unwrap());
+    let feature_content = fs::read_to_string(repo.flux_dir.join("refs/heads/feature")).unwrap();
     assert_eq!(feature_content, head_content);
 
     assert!(fs::exists(repo.work_tree.path().join("README.md")).unwrap());
@@ -328,7 +328,7 @@ fn branching() {
         .commit("Second commit on main branch".to_string())
         .expect("Failed to create the second commit on branch main");
 
-    let main_head = fs::read_to_string(&repo.flux_dir.join("refs/heads/main")).unwrap();
+    let main_head = fs::read_to_string(repo.flux_dir.join("refs/heads/main")).unwrap();
     assert_eq!(second_commit_hash, main_head);
     assert_eq!(
         second_commit_hash,
@@ -370,9 +370,7 @@ fn branching_errors() {
 
     let mut repo = Repository::init(None, false).expect("Failed to initalize flux repository");
     let res = repo.delete_branch("main");
-    let err = res
-        .err()
-        .expect("Expected error when deleting main branch, found Ok()");
+    let err = res.expect_err("Expected error when deleting main branch, found Ok()");
     assert!(matches!(
         err,
         error::RepositoryError::Refs(error::RefsError::DeleteCurrentBranch(..))
@@ -380,9 +378,7 @@ fn branching_errors() {
     println!("{err}");
 
     let res = repo.switch_branch("does-not-exist", false);
-    let err = res
-        .err()
-        .expect("expected error when switching to non existent branch, found Ok()");
+    let err = res.expect_err("expected error when switching to non existent branch, found Ok()");
     assert!(matches!(
         err,
         error::RepositoryError::Refs(error::RefsError::MissingBranch(..))
@@ -390,9 +386,7 @@ fn branching_errors() {
     println!("{err}");
 
     let res = repo.new_branch("main");
-    let err = res
-        .err()
-        .expect("expected error when switching to non existent branch, found Ok()");
+    let err = res.expect_err("expected error when switching to non existent branch, found Ok()");
     assert!(matches!(
         err,
         error::RepositoryError::Refs(error::RefsError::BranchAlreadyExists(..))
@@ -401,9 +395,7 @@ fn branching_errors() {
 
     fs::write(&repo.refs.head_path, "invalidate head").unwrap();
     let res = repo.show_branches();
-    let err = res
-        .err()
-        .expect("expected error when switching to non existent branch, found Ok()");
+    let err = res.expect_err("expected error when switching to non existent branch, found Ok()");
     assert!(matches!(
         err,
         error::RepositoryError::Refs(error::RefsError::InvalidHead { .. })
@@ -412,9 +404,9 @@ fn branching_errors() {
 
     fs::remove_dir_all(repo.refs.refs_path).unwrap();
     let res = Repository::open(None);
-    let err = res
-        .err()
-        .expect("expected error when opening repositroy after deleting refs folder but found Ok()");
+    let err = res.expect_err(
+        "expected error when opening repositroy after deleting refs folder but found Ok()",
+    );
     assert!(matches!(
         err,
         error::RepositoryError::Refs(error::RefsError::Io(..))

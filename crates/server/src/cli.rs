@@ -7,5 +7,5 @@ pub struct Cli {
     pub port: usize,
 
     #[arg(long = "upload-root", default_value_t = String::from("uploads"))]
-    pub upload_root: String
+    pub upload_root: String,
 }

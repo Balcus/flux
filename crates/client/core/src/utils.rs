@@ -26,7 +26,7 @@ pub fn decompress(compressed: Vec<u8>) -> Vec<u8> {
 /// Computes the SHA-1 hash of the given data and returns it.
 pub fn hash(data: &Vec<u8>) -> String {
     let mut hasher = Sha1::new();
-    hasher.update(&data);
+    hasher.update(data);
     let object_hash = format!("{:x}", hasher.finalize());
     object_hash
 }
@@ -35,9 +35,9 @@ pub fn hash(data: &Vec<u8>) -> String {
 /// Returns the compressed bytes.
 pub fn compress(data: &Vec<u8>) -> Vec<u8> {
     let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
-    encoder.write_all(&data).expect("Failed to compress data");
-    let compressed_content = encoder.finish().expect("Failed to compress data");
-    compressed_content
+    encoder.write_all(data).expect("Failed to compress data");
+
+    encoder.finish().expect("Failed to compress data")
 }
 
 pub fn full_path(p: impl AsRef<Path>) -> PathBuf {

@@ -102,7 +102,10 @@ mod tests {
         let result = Index::new(&file_path);
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(matches!(err, error::IndexError::Io(error::IoError::Write { .. })));
+        assert!(matches!(
+            err,
+            error::IndexError::Io(error::IoError::Write { .. })
+        ));
 
         println!("{err}")
     }
@@ -119,7 +122,10 @@ mod tests {
         let res = Index::load(&flux_dir);
         assert!(res.is_err());
         let err = res.unwrap_err();
-        assert!(matches!(err, error::IndexError::Io(error::IoError::Missing { .. })));
+        assert!(matches!(
+            err,
+            error::IndexError::Io(error::IoError::Missing { .. })
+        ));
 
         println!("{err}");
 

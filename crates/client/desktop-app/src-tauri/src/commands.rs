@@ -1,5 +1,5 @@
-use flux_core::internals::repository::Repository;
 use crate::models::RepositoryInfo;
+use flux_core::internals::repository::Repository;
 
 #[tauri::command]
 pub fn open_repository(path: String) -> Result<RepositoryInfo, String> {
