@@ -11,3 +11,7 @@ tonic = { version = "0.12", features = ["transport"] }
 proto = { path = "../proto" }
 async-trait = "0.1"
 futures = "0.3.31"
+clap = { version = "4.5.53", features = ["derive"] }
+
+[[bin]]
+name = "flux_server"
