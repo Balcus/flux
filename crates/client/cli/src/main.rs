@@ -64,6 +64,9 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Clone { url, path } => {
             commands::clone(url, path).await?;
+        },
+        Commands::Status {  } => {
+            commands::status(repo_path)?;
         }
     }
 

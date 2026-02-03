@@ -9,6 +9,7 @@ use crate::{
     utils,
 };
 use std::{
+    collections::HashMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -155,5 +156,46 @@ impl ObjectStore {
             .map_err(|e| error::IoError::rename_error(&temp_path, &object_path, e))?;
 
         Ok(())
+    }
+
+    pub fn commit_to_map(&self, commit_hash: String) -> Result<HashMap<String, String>> {
+        let obj = self.retrieve_object(&commit_hash)?;
+
+        let commit = obj
+            .as_any()
+            .downcast_ref::<Commit>()
+            .ok_or_else(|| error::ObjectStoreError::Downcast { expected: "commit" })?;
+
+        let obj = self.retrieve_object(&commit.tree_hash)?;
+        let tree = obj
+            .as_any()
+            .downcast_ref::<Tree>()
+            .ok_or_else(|| error::ObjectStoreError::Downcast { expected: "tree" })?;
+
+        self.tree_to_map(tree, "")
+    }
+
+    fn tree_to_map(&self, tree: &Tree, prefix: &str) -> Result<HashMap<String, String>> {
+        let mut map = HashMap::new();
+        for entry in tree.entries() {
+            let full_path = if prefix.is_empty() {
+                entry.name.clone()
+            } else {
+                format!("{}{}", prefix, entry.name)
+            };
+
+            if entry.is_dir() {
+                let obj = self.retrieve_object(&entry.hash)?;
+                let subtree = obj
+                    .as_any()
+                    .downcast_ref::<Tree>()
+                    .ok_or_else(|| error::ObjectStoreError::Downcast { expected: "tree" })?;
+                let submap = self.tree_to_map(subtree, &format!("{}/", full_path))?;
+                map.extend(submap);
+            } else {
+                map.insert(full_path, entry.hash);
+            }
+        }
+        Ok(map)
     }
 }

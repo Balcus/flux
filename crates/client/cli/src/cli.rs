@@ -139,4 +139,7 @@ pub enum Commands {
         url: String,
         path: Option<String>,
     },
+    Status {
+        
+    }
 }

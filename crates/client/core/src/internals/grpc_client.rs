@@ -41,7 +41,7 @@ impl GrpcClient {
         })
     }
 
-    fn repo_name(&self) -> Result<String> {
+    pub fn repo_name(&self) -> Result<String> {
         let url = Url::parse(&self.url).map_err(|e| error::GrpcClientError::Url {
             url: self.url.clone(),
             source: Some(e),
@@ -86,7 +86,6 @@ impl GrpcClient {
 
     pub async fn clone_repository(&mut self) -> Result<Vec<u8>> {
         let repo_name = self.repo_name()?;
-
         let request = tonic::Request::new(CloneRequest { name: repo_name });
 
         let mut stream = self

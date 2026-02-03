@@ -128,6 +128,9 @@ pub enum ObjectStoreError {
 
     #[error(transparent)]
     Io(#[from] IoError),
+
+    #[error("Object downcast error, expected type: '{expected}'.")]
+    Downcast { expected: &'static str },
 }
 
 #[derive(Debug, Error)]

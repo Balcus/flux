@@ -12,6 +12,16 @@ pub struct TreeEntry {
     pub name: String,
 }
 
+impl TreeEntry {
+    pub fn is_dir(&self) -> bool {
+        self.mode == "040000"
+    }
+
+    pub fn is_file(&self) -> bool {
+        !(self.mode == "040000")
+    }
+}
+
 pub struct Tree {
     content: Vec<u8>,
 }

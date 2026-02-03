@@ -98,3 +98,9 @@ pub async fn clone(url: String, path: Option<String>) -> anyhow::Result<()> {
     let _repository = Repository::clone(url, path).await?;
     Ok(())
 }
+
+pub fn status(repo_path: Option<String>) -> anyhow::Result<()> {
+    let repository = Repository::open(repo_path)?;
+    repository.status()?;
+    Ok(())
+}
