@@ -12,6 +12,8 @@ proto = { path = "../proto" }
 async-trait = "0.1"
 futures = "0.3.31"
 clap = { version = "4.5.53", features = ["derive"] }
+jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
+serde = { version = "1.0.228", features = ["derive"] }
 
 [[bin]]
 name = "flux_server"

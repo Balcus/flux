@@ -141,5 +141,8 @@ pub enum Commands {
     },
     Status {
         
+    },
+    Auth {
+        url: Option<String>,
     }
 }

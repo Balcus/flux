@@ -67,6 +67,9 @@ async fn main() -> anyhow::Result<()> {
         },
         Commands::Status {  } => {
             commands::status(repo_path)?;
+        },
+        Commands::Auth { url } => {
+            commands::auth(repo_path, url).await?;
         }
     }
 

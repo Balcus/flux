@@ -10,7 +10,7 @@ build-proto:
 build: build-proto build-server build-client
 
 server: build-server
-    cargo run -p flux_server
+    cargo run -p flux_server -- -s "secret"
 
 server-cleanup:
     rm -rf crates/server/uploads

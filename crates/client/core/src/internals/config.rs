@@ -11,6 +11,7 @@ pub enum Field {
     UserName,
     UserEmail,
     Origin,
+    AccessToken
 }
 
 impl FromStr for Field {
@@ -21,6 +22,7 @@ impl FromStr for Field {
             "user_name" => Ok(Field::UserName),
             "user_email" => Ok(Field::UserEmail),
             "origin" => Ok(Field::Origin),
+            "access_token" => Ok(Field::AccessToken),
             _ => Err(()),
         }
     }
@@ -32,6 +34,7 @@ impl fmt::Display for Field {
             Field::UserName => "user_name",
             Field::UserEmail => "user_email",
             Field::Origin => "origin",
+            Field::AccessToken => "access_token"
         };
         write!(f, "{}", s)
     }

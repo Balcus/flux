@@ -271,6 +271,9 @@ pub enum GrpcClientError {
 
     #[error("Failed to clone repository.{0}")]
     Clone(#[source] tonic::Status),
+
+    #[error("Failed authentication for remote server.")]
+    Auth(#[source] tonic::Status)
 }
 
 impl RepositoryError {

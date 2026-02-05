@@ -8,4 +8,7 @@ pub struct Cli {
 
     #[arg(long = "upload-root", default_value_t = String::from("uploads"))]
     pub upload_root: String,
+
+    #[arg(long = "secret", short = 's')]
+    pub secret: String
 }

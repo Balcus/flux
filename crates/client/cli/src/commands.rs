@@ -104,3 +104,9 @@ pub fn status(repo_path: Option<String>) -> anyhow::Result<()> {
     repository.status()?;
     Ok(())
 }
+
+pub async fn auth(repo_path: Option<String>, url: Option<String>) -> anyhow::Result<()> {
+    let mut repository = Repository::open(repo_path)?;
+    repository.auth(url).await?;
+    Ok(())
+}

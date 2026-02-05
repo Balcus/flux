@@ -1,5 +1,6 @@
 use crate::error;
-use proto::models::Chunk;
+use proto::models::auth_serviec_client::AuthServiecClient;
+use proto::models::{Chunk, IssueTokenResponse};
 use proto::models::{CloneRequest, UploadStatus};
 use proto::models::{
     clone_service_client::CloneServiceClient, push_service_client::PushServiceClient,
@@ -16,12 +17,19 @@ const CHUNK_SIZE: usize = 256 * 1024;
 #[derive(Debug)]
 pub struct GrpcClient {
     url: String,
+    pub auth_client: AuthServiecClient<Channel>,
     pub push_client: PushServiceClient<Channel>,
     pub clone_client: CloneServiceClient<Channel>,
 }
 
 impl GrpcClient {
     pub async fn connect_remote(url: String) -> Result<Self> {
+        let auth_client = AuthServiecClient::connect(url.clone()).await.map_err(|e| {
+            error::GrpcClientError::ConnectRemote {
+                url: url.clone(),
+                source: e,
+            }
+        })?;
         let push_client = PushServiceClient::connect(url.clone()).await.map_err(|e| {
             error::GrpcClientError::ConnectRemote {
                 url: url.clone(),
@@ -35,6 +43,7 @@ impl GrpcClient {
                 source: e,
             })?;
         Ok(Self {
+            auth_client,
             push_client,
             clone_client,
             url,
@@ -54,6 +63,20 @@ impl GrpcClient {
                 source: None,
             })?;
         Ok(repo_name.to_string())
+    }
+
+    pub async fn auth(&mut self, user_name: String, user_email: String) -> Result<IssueTokenResponse> {
+        let request = tonic::Request::new(proto::models::IssueTokenRequest {
+            user_name,
+            user_email,
+        });
+
+        let response = self.auth_client
+            .issue_token(request)
+            .await
+            .map_err(|e| error::GrpcClientError::Auth(e))?;
+
+        Ok(response.into_inner())
     }
 
     pub async fn push(&mut self, repo_name: String, content: Vec<u8>) -> Result<UploadStatus> {
