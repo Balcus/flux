@@ -22,7 +22,6 @@ struct Claims {
     user_email: String,
 }
 
-// TODO: add a secret key and find a way to somehow store it securely, maybe given from cli when starting the server
 #[tonic::async_trait]
 impl AuthServiec for FluxAuthService {
     async fn issue_token(

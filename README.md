@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./assets/logo.png" alt="Flux Logo" width="200">
+</p>
+
 # Flux
 
 Flux is a distributed version control system designed to be as useful as git for small to medium projects, while providing a simpler and more intuitive API.
