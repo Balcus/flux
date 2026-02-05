@@ -43,6 +43,7 @@ impl fmt::Display for Field {
 pub struct Credentials {
     pub user_name: String,
     pub user_email: String,
+    pub access_token: Option<String>
 }
 
 #[derive(Debug)]
@@ -145,31 +146,30 @@ impl Config {
         Ok(())
     }
 
-    fn get_required(&self, field: Field) -> Result<String, error::ConfigError> {
+    pub fn get_required(&self, field: Field) -> Result<String, error::ConfigError> {
         self.map
             .get(&field)
             .and_then(|v| v.clone())
             .ok_or_else(|| error::ConfigError::NotSet(field.to_string()))
     }
 
-    pub fn get_credential(&self) -> Result<Credentials, error::ConfigError> {
+    pub fn get_credentials(&self) -> Result<Credentials, error::ConfigError> {
         Ok(Credentials {
             user_name: self.get_required(Field::UserName)?,
             user_email: self.get_required(Field::UserEmail)?,
+            access_token: self.get("access_token")?
         })
     }
 
-    pub fn get(&self, key: &str) -> Result<String, error::ConfigError> {
-        let field = &key
-            .parse::<Field>()
-            .map_err(|_| error::ConfigError::UnsupportedField(key.to_string()))?;
+    pub fn get(&self, key: &str) -> Result<Option<String>, error::ConfigError> {
+    let field = key
+        .parse::<Field>()
+        .map_err(|_| error::ConfigError::UnsupportedField(key.to_string()))?;
 
-        let val = self
-            .map
-            .get(field)
-            .and_then(|v| v.clone())
-            .ok_or_else(|| error::ConfigError::NotSet(key.to_string()))?;
+    let val = self.map
+        .get(&field)
+        .and_then(|v| v.clone());
 
-        Ok(val)
-    }
+    Ok(val)
+}
 }

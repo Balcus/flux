@@ -191,6 +191,32 @@ pub enum RefsError {
 }
 
 #[derive(Debug, Error)]
+pub enum GrpcClientError {
+    #[error("Failed to connect to remote repository at '{url}'. {source}")]
+    ConnectRemote {
+        url: String,
+        #[source]
+        source: tonic::transport::Error,
+    },
+
+    #[error("Failed push to remote repoository. {0}")]
+    Push(#[source] tonic::Status),
+
+    #[error("Failed to parse url: '{url}'.")]
+    Url {
+        url: String,
+        #[source]
+        source: Option<url::ParseError>,
+    },
+
+    #[error("Failed to clone repository.{0}")]
+    Clone(#[source] tonic::Status),
+
+    #[error("Failed authentication for remote server.")]
+    Auth(#[source] tonic::Status)
+}
+
+#[derive(Debug, Error)]
 pub enum RepositoryError {
     #[error(transparent)]
     Io(#[from] IoError),
@@ -248,32 +274,9 @@ pub enum RepositoryError {
 
     #[error(transparent)]
     Grpc(#[from] GrpcClientError),
-}
 
-#[derive(Debug, Error)]
-pub enum GrpcClientError {
-    #[error("Failed to connect to remote repository at '{url}'. {source}")]
-    ConnectRemote {
-        url: String,
-        #[source]
-        source: tonic::transport::Error,
-    },
-
-    #[error("Failed push to remote repoository. {0}")]
-    Push(#[source] tonic::Status),
-
-    #[error("Failed to parse url: '{url}'.")]
-    Url {
-        url: String,
-        #[source]
-        source: Option<url::ParseError>,
-    },
-
-    #[error("Failed to clone repository.{0}")]
-    Clone(#[source] tonic::Status),
-
-    #[error("Failed authentication for remote server.")]
-    Auth(#[source] tonic::Status)
+    #[error("Missing access token from remote server. Try running flux auth and try again.")]
+    MissingToken
 }
 
 impl RepositoryError {

@@ -1,18 +1,21 @@
 use jsonwebtoken::{EncodingKey, Header, encode};
 use proto::models::{IssueTokenRequest, IssueTokenResponse, auth_serviec_server::AuthServiec};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
 
-#[derive(Debug, Default)]
+use crate::user_store::UserStore;
+
+#[derive(Debug)]
 pub struct FluxAuthService {
-    secret: String
+    secret: String,
+    user_store: Arc<Mutex<UserStore>>,
 }
 
 impl FluxAuthService {
-    pub fn new(secret: String) -> Self {
-        Self {
-            secret
-        }
+    pub fn new(secret: String, user_store: Arc<Mutex<UserStore>>) -> Self {
+        Self { secret, user_store }
     }
 }
 
@@ -31,8 +34,8 @@ impl AuthServiec for FluxAuthService {
         let req = request.into_inner();
 
         let claims = Claims {
-            user_name: req.user_name,
-            user_email: req.user_email,
+            user_name: req.user_name.clone(),
+            user_email: req.user_email.clone(),
         };
 
         let token = encode(
@@ -41,6 +44,13 @@ impl AuthServiec for FluxAuthService {
             &EncodingKey::from_secret(self.secret.as_ref()),
         )
         .map_err(|_| tonic::Status::internal("Failed to generate token"))?;
+
+        self.user_store
+            .lock()
+            .await
+            .add_user(req.user_name, req.user_email, token.clone())
+            .await
+            .map_err(|e| Status::internal(format!("Failed to add user to remote user store. {e}")))?;
 
         Ok(tonic::Response::new(proto::models::IssueTokenResponse {
             access_token: token,

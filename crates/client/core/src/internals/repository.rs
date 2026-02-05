@@ -2,9 +2,8 @@ use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use tar::Archive;
-
 use crate::error;
-use crate::internals::config::Config;
+use crate::internals::config::{Config, Field};
 use crate::internals::grpc_client::GrpcClient;
 use crate::internals::index::Index;
 use crate::internals::object_store::ObjectStore;
@@ -129,14 +128,17 @@ impl Repository {
             Some(u) => u,
             None => self
                 .config
-                .get("origin")
+                .get_required(Field::Origin)
                 .map_err(|_| error::RepositoryError::MissingOrigin())?,
         };
         self.config.set("origin".to_string(), url.clone())?;
         let mut client = GrpcClient::connect_remote(url).await?;
-        let credentials = self.config.get_credential()?;
-        let token = client.auth(credentials.user_name, credentials.user_email).await?;
-        self.config.set("access_token".to_string(), token.access_token)?;
+        let credentials = self.config.get_credentials()?;
+        let token = client
+            .auth(credentials.user_name, credentials.user_email)
+            .await?;
+        self.config
+            .set("access_token".to_string(), token.access_token)?;
         Ok(())
     }
 
@@ -340,7 +342,7 @@ impl Repository {
 
         let credentials = self
             .config
-            .get_credential()
+            .get_credentials()
             .map_err(error::RepositoryError::Credentials)?;
         let user_name = credentials.user_name;
         let user_email = credentials.user_email;
@@ -412,26 +414,37 @@ impl Repository {
 
     pub async fn push(&mut self, url: Option<String>) -> Result<()> {
         let content = self.archive()?;
+        let credentials = self.config.get_credentials()?;
+
+        let access_token = credentials
+            .access_token
+            .ok_or_else(|| error::RepositoryError::MissingToken)?;
+
         let url = match url {
             Some(u) => u,
             None => self
                 .config
-                .get("origin")
+                .get_required(Field::Origin)
                 .map_err(|_| error::RepositoryError::MissingOrigin())?,
         };
 
-        self.config.set("origin".to_string(), url.clone())?;
-
-        let mut client = GrpcClient::connect_remote(url)
+        let mut client = GrpcClient::connect_remote(url.clone())
             .await
             .map_err(|e| error::RepositoryError::from("Connection to remote failed.", e))?;
+
         let response = client
-            .push(self.name.clone(), content)
+            .push(
+                self.name.clone(),
+                content,
+                credentials.user_email,
+                credentials.user_name,
+                access_token,
+            )
             .await
             .map_err(|e| error::RepositoryError::from("Failed to push to remote", e))?;
 
+        self.config.set("origin".to_string(), url)?;
         println!("Server response: {}", response.response_message);
-        println!("Status code: {}", response.code);
 
         Ok(())
     }
@@ -512,7 +525,7 @@ impl Repository {
     ) -> Result<String> {
         let credentials = self
             .config
-            .get_credential()
+            .get_credentials()
             .map_err(error::RepositoryError::Credentials)?;
 
         let user_name = credentials.user_name;

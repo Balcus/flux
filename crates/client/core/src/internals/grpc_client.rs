@@ -65,13 +65,18 @@ impl GrpcClient {
         Ok(repo_name.to_string())
     }
 
-    pub async fn auth(&mut self, user_name: String, user_email: String) -> Result<IssueTokenResponse> {
+    pub async fn auth(
+        &mut self,
+        user_name: String,
+        user_email: String,
+    ) -> Result<IssueTokenResponse> {
         let request = tonic::Request::new(proto::models::IssueTokenRequest {
             user_name,
             user_email,
         });
 
-        let response = self.auth_client
+        let response = self
+            .auth_client
             .issue_token(request)
             .await
             .map_err(|e| error::GrpcClientError::Auth(e))?;
@@ -79,7 +84,14 @@ impl GrpcClient {
         Ok(response.into_inner())
     }
 
-    pub async fn push(&mut self, repo_name: String, content: Vec<u8>) -> Result<UploadStatus> {
+    pub async fn push(
+        &mut self,
+        repo_name: String,
+        content: Vec<u8>,
+        user_email: String,
+        user_name: String,
+        access_token: String,
+    ) -> Result<UploadStatus> {
         let (tx, rx) = tokio::sync::mpsc::channel(32);
 
         tokio::spawn(async move {
@@ -98,7 +110,18 @@ impl GrpcClient {
         });
 
         let stream = ReceiverStream::new(rx);
-        let request = tonic::Request::new(stream);
+        let mut request = tonic::Request::new(stream);
+        request
+            .metadata_mut()
+            .insert("user-email", user_email.parse().unwrap());
+        request
+            .metadata_mut()
+            .insert("user-name", user_name.parse().unwrap());
+        request.metadata_mut().insert(
+            "authorization",
+            format!("Bearer {}", access_token).parse().unwrap(),
+        );
+
         let response = self
             .push_client
             .push(request)
@@ -107,9 +130,19 @@ impl GrpcClient {
         Ok(response.into_inner())
     }
 
+    pub fn extract_path(&self) -> Result<String> {
+        let url = Url::parse(&self.url).map_err(|e| error::GrpcClientError::Url {
+            url: self.url.clone(),
+            source: Some(e),
+        })?;
+
+        Ok(url.path().trim_start_matches('/').to_string())
+    }
+
+    // Changed temporarily to allow cloning any repo if the correct path on the server is given.
     pub async fn clone_repository(&mut self) -> Result<Vec<u8>> {
-        let repo_name = self.repo_name()?;
-        let request = tonic::Request::new(CloneRequest { name: repo_name });
+        let path = self.extract_path()?;
+        let request = tonic::Request::new(CloneRequest { name: path });
 
         let mut stream = self
             .clone_client
@@ -119,7 +152,6 @@ impl GrpcClient {
             .into_inner();
 
         let mut content = Vec::new();
-
         while let Some(chunk) = stream
             .message()
             .await

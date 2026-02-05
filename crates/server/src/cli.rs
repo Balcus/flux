@@ -10,5 +10,8 @@ pub struct Cli {
     pub upload_root: String,
 
     #[arg(long = "secret", short = 's')]
-    pub secret: String
+    pub secret: String,
+
+    #[arg(long = "user-store-path")]
+    pub user_store_path: Option<String>
 }
