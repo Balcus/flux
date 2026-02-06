@@ -2,16 +2,15 @@ import { useState, useEffect } from "react";
 import { MENU_ITEMS, MenuItem } from "../../constants";
 import { useRepository } from "../../context/RepositoryContext";
 import { Branch } from "../../models/Branch";
+import { useNavigate } from "react-router-dom";
 import "../../App.css";
 import "./Menu.css";
 
 export default function Menu() {
-  const [expandedItems, setExpandedItems] = useState<string[]>([
-    "workspace",
-    "branches",
-  ]);
+  const [expandedItems, setExpandedItems] = useState<string[]>(["workspace", "branches"]);
   const [branches, setBranches] = useState<MenuItem[]>([]);
   const { repository } = useRepository();
+  const nav = useNavigate();
 
   useEffect(() => {
     if (repository?.branches) {
@@ -26,41 +25,37 @@ export default function Menu() {
     }
   }, [repository]);
 
-  const toggleItem = (id: string) => {
-    setExpandedItems((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
+  const handleItemClick = (item: MenuItem) => {
+    if (item.children && item.children.length > 0) {
+      setExpandedItems((prev) =>
+        prev.includes(item.id) ? prev.filter((i) => i !== item.id) : [...prev, item.id]
+      );
+    } else if (item.link) {
+      nav(item.link);
+    }
   };
 
   const renderMenuItem = (item: MenuItem, isChild = false) => (
     <li key={item.id} className={isChild ? "menu-child-item" : "menu-item"}>
-      {item.children !== undefined ? (
-        <>
-          <button
-            onClick={() => toggleItem(item.id)}
-            className={`menu-button ${isChild ? "child" : "parent"}`}
-          >
-            {!isChild && item.children.length > 0 && (
-              <span className="toggle-icon">
-                {expandedItems.includes(item.id) ? "⌄" : "›"}
-              </span>
-            )}
-            {item.icon && <img className="icon" src={item.icon} alt="" />}
-            <span className={`label ${item.className || ""}`}>
-              {item.label}
-            </span>
-          </button>
-          {expandedItems.includes(item.id) && item.children.length > 0 && (
-            <ul className="submenu">
-              {item.children.map((child) => renderMenuItem(child, true))}
-            </ul>
-          )}
-        </>
-      ) : (
-        <div className="menu-button child">
-          {item.icon && <img className="icon" src={item.icon} alt="" />}
-          <span className={`label ${item.className || ""}`}>{item.label}</span>
-        </div>
+      <button
+        onClick={() => handleItemClick(item)}
+        className={`menu-button ${isChild ? "child" : "parent"}`}
+      >
+        {!isChild && item.children && item.children.length > 0 && (
+          <span className="toggle-icon">
+            {expandedItems.includes(item.id) ? "⌄" : "›"}
+          </span>
+        )}
+        {item.icon && <img className="icon" src={item.icon} alt="" />}
+        <span className={`label ${item.className || ""}`}>
+          {item.label}
+        </span>
+      </button>
+      
+      {item.children && expandedItems.includes(item.id) && item.children.length > 0 && (
+        <ul className="submenu">
+          {item.children.map((child) => renderMenuItem(child, true))}
+        </ul>
       )}
     </li>
   );

@@ -2,7 +2,6 @@ import { Outlet } from 'react-router-dom';
 import Menu from './components/Menu'
 import { useRepository } from './context/RepositoryContext';
 import OpenRepository from './components/OpenRepository';
-
 import "./App.css";
 
 function App() {
@@ -15,7 +14,9 @@ function App() {
   return (
     <main>
       <Menu />
-      <Outlet />
+      <div className="content">
+        <Outlet />
+      </div>
     </main>
   );
 }
