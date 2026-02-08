@@ -3,6 +3,7 @@ import { MENU_ITEMS, MenuItem } from "../../constants";
 import { useRepository } from "../../context/RepositoryContext";
 import { Branch } from "../../models/Branch";
 import { useNavigate } from "react-router-dom";
+
 import "../../App.css";
 import "./Menu.css";
 
