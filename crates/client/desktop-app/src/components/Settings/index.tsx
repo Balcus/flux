@@ -1,45 +1,53 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
-import './Settings.css';
-import { Repository } from "../../models/Repository";
+import "./Settings.css";
+import { useRepository } from "../../context/RepositoryContext";
+import { toast } from "react-toastify";
 
-interface SettingsProps {
-  path: string;
-}
-
-export default function Settings({ path }: SettingsProps) {
+export default function Settings() {
+  const { repository, refreshRepository } = useRepository();
   const [username, setUsername] = useState<string>("");
   const [email, setEmail] = useState<string>("");
   const [origin, setOrigin] = useState<string>("");
   const [isSaving, setIsSaving] = useState<boolean>(false);
 
   useEffect(() => {
-    if (path) {
-      invoke<Repository>("open_repository", { path })
-        .then((info) => {
-          setUsername(info.user_name ?? "");
-          setEmail(info.user_email ?? "");
-          setOrigin(info.origin ?? "");
-        })
-        .catch((err: string) => console.error(err));
+    if (repository) {
+      setUsername(repository.user_name ?? "");
+      setEmail(repository.user_email ?? "");
+      setOrigin(repository.origin ?? "");
     }
-  }, [path]);
+  }, [repository]);
 
   const handleSave = async (): Promise<void> => {
+    if (!repository) return;
     setIsSaving(true);
+
     try {
-      await invoke<Repository>("update_settings", {
-        path,
-        user_name: username,
-        user_email: email,
-        origin: origin,
-      });
+      await invoke("update_user_config", { userName: username, userEmail: email });
+      await invoke("update_origin", { origin });
+      await refreshRepository();
+      
+      toast.success("Settings saved successfully!");
     } catch (err) {
-      console.error(err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      
+      toast.error(
+        <div>
+          <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '2px' }}>
+            Failed to save settings
+          </div>
+          <div style={{ fontSize: '12px', opacity: 0.8, lineHeight: '1.4' }}>
+            {errMsg}
+          </div>
+        </div>
+      );
     } finally {
       setIsSaving(false);
     }
   };
+
+  if (!repository) return <div>No repository loaded</div>;
 
   return (
     <div className="settings-container">
@@ -47,7 +55,6 @@ export default function Settings({ path }: SettingsProps) {
         <h1>Settings</h1>
         <p>Manage repository configuration and user identity.</p>
       </div>
-
       <div className="settings-body">
         <section className="settings-section">
           <h2>User Credentials</h2>
@@ -57,23 +64,22 @@ export default function Settings({ path }: SettingsProps) {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              placeholder="Enter your username"
             />
             <p className="description">
-              This name will be used when creating commits as well as logging
-              into remote repositories.
+              This name will be used when creating commitsand authenticating with the reomote server.
             </p>
           </div>
-
           <div className="setting-item">
             <label>Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email"
             />
             <p className="description">
-              This email will be used when creating commits as well as logging
-              into remote repositories.
+              This email will be used when creating commits and authenticating with the reomote server.
             </p>
           </div>
         </section>
@@ -86,18 +92,15 @@ export default function Settings({ path }: SettingsProps) {
               type="text"
               value={origin}
               onChange={(e) => setOrigin(e.target.value)}
+              placeholder="https://github.com/user/repo.git"
             />
             <p className="description">
-              The primary remote server address for this current workspace.
+              The primary remote server address for this workspace.
             </p>
           </div>
         </section>
 
-        <button 
-          className="save-button" 
-          onClick={handleSave}
-          disabled={isSaving || !path}
-        >
+        <button className="save-button" onClick={handleSave} disabled={isSaving}>
           {isSaving ? "Saving..." : "Apply Changes"}
         </button>
       </div>

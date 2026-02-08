@@ -6,6 +6,16 @@
   text-align: center;
 }
 
+.title {
+  color: var(--title-color);
+}
+
+.description {
+  font-size: 1.25rem;
+  color: var(--subtitle-color);
+  margin: 0.2rem 0 2rem 0;
+}
+
 .open-repo-button {
   padding: 1rem 10rem;
   font-size: 1.125rem;

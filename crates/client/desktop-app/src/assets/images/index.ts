@@ -1,3 +1,3 @@
-import OpenRepositoryBg from "./2789.jpg";
+import OpenRepositoryBg from "./open-repo-bg.jpg";
 
 export default OpenRepositoryBg;

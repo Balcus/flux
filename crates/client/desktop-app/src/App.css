@@ -19,6 +19,7 @@
   --error-bg: #fff5f5;
   --error-border: #ffcccb;
   --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+  --success-color: #34c759;
 }
 
 main {
