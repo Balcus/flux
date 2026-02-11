@@ -15,7 +15,7 @@
 .app-title {
   font-size: 18px;
   font-weight: 600;
-  color: var(--title-color);
+  color: var(--flux-blue);
 }
 
 .app-subtitle {

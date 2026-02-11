@@ -29,8 +29,8 @@ export default function Settings() {
       await refreshRepository();
       
       toast.success("Settings saved successfully!");
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
+    } catch (e) {
+      const error = e instanceof Error ? e.message : String(e);
       
       toast.error(
         <div>
@@ -38,7 +38,7 @@ export default function Settings() {
             Failed to save settings
           </div>
           <div style={{ fontSize: '12px', opacity: 0.8, lineHeight: '1.4' }}>
-            {errMsg}
+            {error}
           </div>
         </div>
       );

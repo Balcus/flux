@@ -4,10 +4,27 @@
   justify-content: center;
   min-height: 100vh;
   text-align: center;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  width: 100%;
+  transition: filter 0.3s ease;
+}
+
+.main-content {
+  transition:
+    filter 0.3s ease,
+    transform 0.3s ease;
+}
+
+.container.blurred .main-content {
+  filter: blur(8px);
+  transform: scale(0.98);
+  pointer-events: none;
 }
 
 .title {
-  color: var(--title-color);
+  color: var(--flux-blue);
 }
 
 .description {
@@ -34,7 +51,7 @@
   padding: 0;
   font-size: 1rem;
   font-weight: 600;
-  color: var(--title-color);
+  color: var(--flux-blue);
   background: var(--app-bg);
   border: 0.25px solid var(--subtitle-color);
   border-radius: 30px;
@@ -50,6 +67,7 @@
   height: 48px;
   display: block;
   object-fit: contain;
+  margin-left: 10px;
 }
 
 .repo-control-button span {
@@ -72,11 +90,105 @@
   cursor: not-allowed;
 }
 
-.error-message {
-  padding: 0.75rem;
-  background: var(--error-bg);
-  border: 1px solid var(--error-border);
+.clone-content {
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  min-width: 400px;
+}
+
+.clone-content h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+  color: var(--flux-blue);
+  text-align: left;
+}
+
+.clone-content input {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  margin-bottom: 1.5rem;
+  outline: none;
+}
+
+.clone-content input:focus {
+  border-color: var(--flux-blue);
+}
+
+.clone-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.btn-secondary {
+  padding: 10px 20px;
   border-radius: 8px;
-  color: var(--error-color);
-  font-size: 0.875rem;
+  border: none;
+  background: var(--hover-bg);
+  color: var(--menu-child-color);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: none;
+  background: var(--flux-blue);
+  color: var(--app-bg);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input-label {
+  display: block;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--subtitle-color);
+  margin-bottom: 6px;
+}
+
+.path-input-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.path-input-container input {
+  margin-bottom: 0;
+  flex-grow: 1;
+}
+
+.btn-browse-icon {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s;
+}
+
+.btn-browse-icon:hover {
+  opacity: 0.7;
+}
+
+.icon-small {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
 }

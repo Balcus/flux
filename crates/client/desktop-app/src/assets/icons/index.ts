@@ -4,6 +4,7 @@ import SettingsIcon from "./SettingsIcon.svg";
 import BranchIcon from "./BranchIcon.svg";
 import CloneIcon from "./CloneIcon.svg";
 import OpenIcon from "./OpenIcon.svg";
+import BrowseIcon from "./BrowseIcon.svg";
 
 export {
   FolderIcon,
@@ -12,4 +13,5 @@ export {
   BranchIcon,
   CloneIcon,
   OpenIcon,
+  BrowseIcon
 };

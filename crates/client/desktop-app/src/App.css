@@ -8,18 +8,18 @@
 :root {
   --app-bg: #fafafa;
   --border-color: #e5e5e5;
-  --title-color: #007aff;
+  --flux-blue: #007aff;
   --subtitle-color: rgba(0, 0, 0, 0.55);
-  --menu-parent-color: #007aff;
   --menu-child-color: rgba(0, 0, 0, 0.7);
   --hover-bg: #e8e8e8;
   --icon-opacity: 0.75;
   --toggle-color: rgba(0, 0, 0, 0.5);
-  --error-color: #ff3b30;
+  --bright-red: #ff3b30;
   --error-bg: #fff5f5;
   --error-border: #ffcccb;
   --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
   --success-color: #34c759;
+  --border-color: rgba(0, 0, 0, 0.3);
 }
 
 main {
