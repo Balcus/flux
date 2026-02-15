@@ -13,7 +13,6 @@ use crate::objects::blob::Blob;
 use crate::objects::commit::Commit;
 use crate::objects::object_type::{FluxObject, ObjectType};
 use crate::objects::tree::Tree;
-use std::collections::HashMap;
 use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
@@ -273,64 +272,6 @@ impl Repository {
         Ok(())
     }
 
-    pub fn status(&self) -> Result<()> {
-        let index = &self.index.map;
-
-        let prev_commit_map = match self.refs.head_commit() {
-            Ok(hash) => self.object_store.commit_to_map(hash)?,
-            Err(_) => HashMap::new(),
-        };
-
-        let mut new_files = Vec::new();
-        let mut modified_files = Vec::new();
-        let mut deleted_files = Vec::new();
-
-        for (path, hash) in index {
-            if let Some(prev_hash) = prev_commit_map.get(path) {
-                if prev_hash != hash {
-                    modified_files.push(path.clone());
-                }
-            } else {
-                new_files.push(path.clone());
-            }
-        }
-
-        for (path, _) in &prev_commit_map {
-            if !index.contains_key(path) {
-                deleted_files.push(path.clone());
-            }
-        }
-
-        if new_files.is_empty() && modified_files.is_empty() && deleted_files.is_empty() {
-            println!("nothing to commit, working tree clean");
-            return Ok(());
-        }
-
-        println!("These changes will be included in the next commit:\n");
-        if !new_files.is_empty() {
-            println!("Added: ");
-            for file in new_files {
-                println!(" + {}", file);
-            }
-        }
-
-        if !modified_files.is_empty() {
-            println!("\nModified: ");
-            for file in modified_files {
-                println!(" ~ {}", file);
-            }
-        }
-
-        if !deleted_files.is_empty() {
-            println!("\nRemoved: ");
-            for file in deleted_files {
-                println!(" - {}", file);
-            }
-        }
-
-        Ok(())
-    }
-
     pub fn commit(&mut self, message: String) -> Result<String> {
         if self.index.is_empty() {
             return Err(error::RepositoryError::IndexEmpty);
@@ -353,7 +294,6 @@ impl Repository {
         self.object_store.store(&commit)?;
         let hash = commit.hash();
         self.refs.update_head(&hash)?;
-        self.index.clear()?;
 
         Ok(hash)
     }

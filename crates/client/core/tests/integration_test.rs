@@ -279,6 +279,7 @@ fn commit_without_credentials() {
     println!("{err}")
 }
 
+// TODO: this test is currently broken because the index is no longer cleared on commit and the test assumes it does
 #[test]
 #[serial]
 fn branching() {

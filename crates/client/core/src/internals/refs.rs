@@ -14,6 +14,7 @@ pub struct Refs {
 
 pub type Result<T> = std::result::Result<T, error::RefsError>;
 
+// TODO: change the switch branch logic, currently a commit no longer clears the index (it shouldnt have either)
 impl Refs {
     fn parse_head_ref(head_contents: &str) -> Result<String> {
         let s = head_contents.trim();

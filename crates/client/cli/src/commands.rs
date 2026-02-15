@@ -1,4 +1,7 @@
-use flux_core::internals::repository::Repository;
+use flux_core::{
+    commands::{Command, status::StatusCommand},
+    internals::repository::Repository,
+};
 
 pub fn set(repo_path: Option<String>, key: String, value: String) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
@@ -100,8 +103,8 @@ pub async fn clone(url: String, path: Option<String>) -> anyhow::Result<()> {
 }
 
 pub fn status(repo_path: Option<String>) -> anyhow::Result<()> {
-    let repository = Repository::open(repo_path)?;
-    repository.status()?;
+    let mut repository = Repository::open(repo_path)?;
+    StatusCommand::new().run(&mut repository)?;
     Ok(())
 }
 
