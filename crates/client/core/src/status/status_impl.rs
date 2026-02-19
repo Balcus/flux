@@ -8,6 +8,7 @@ use std::path::Path;
 use anyhow::anyhow;
 
 pub struct Status {
+    pub head_tree: HashMap<String, String>,
     pub index_changes: HashMap<String, ChangeType>,
     pub workspace_changes: HashMap<String, ChangeType>,
     pub untracked: Vec<String>,
@@ -23,12 +24,13 @@ pub enum ChangeType {
 impl Status {
     pub fn new(repo: &Repository) -> Result<Self> {
         let index = &repo.index.map;
-        let head_snapshot = Self::get_head_snapshot(repo)?;
-        let index_changes = Self::compare_head_to_index(&head_snapshot, index);
+        let head_tree = Self::get_head_snapshot(repo)?;
+        let index_changes = Self::compare_head_to_index(&head_tree, index);
         let workspace_changes = Self::compare_index_to_workspace(repo, index)?;
         let untracked = Self::find_untracked_files(repo, index)?;
 
         Ok(Self {
+            head_tree,
             index_changes,
             workspace_changes,
             untracked,

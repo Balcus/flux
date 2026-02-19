@@ -144,5 +144,9 @@ pub enum Commands {
     },
     Auth {
         url: Option<String>,
+    },
+    Diff {
+        #[arg(long = "staged")]
+        staged: bool
     }
 }

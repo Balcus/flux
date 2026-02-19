@@ -1,7 +1,7 @@
 use hex::FromHexError;
 use std::{
     io,
-    path::{Path, PathBuf},
+    path::{Path, PathBuf}, string::FromUtf8Error,
 };
 use thiserror::Error;
 
@@ -131,6 +131,9 @@ pub enum ObjectStoreError {
 
     #[error("Object downcast error, expected type: '{expected}'.")]
     Downcast { expected: &'static str },
+
+    #[error("Invalid encoding for object content")]
+    InvalidEncoding(#[from] FromUtf8Error)
 }
 
 #[derive(Debug, Error)]
@@ -276,7 +279,7 @@ pub enum RepositoryError {
     Grpc(#[from] GrpcClientError),
 
     #[error("Missing access token from remote server. Try running flux auth and try again.")]
-    MissingToken
+    MissingToken,
 }
 
 impl RepositoryError {

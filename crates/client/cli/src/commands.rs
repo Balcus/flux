@@ -1,5 +1,5 @@
 use flux_core::{
-    commands::{Command, status::StatusCommand},
+    commands::{Command, diff::DiffCommand, status::StatusCommand},
     internals::repository::Repository,
 };
 
@@ -104,12 +104,18 @@ pub async fn clone(url: String, path: Option<String>) -> anyhow::Result<()> {
 
 pub fn status(repo_path: Option<String>) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
-    StatusCommand::new().run(&mut repository)?;
+    StatusCommand::new(&mut repository).run()?;
     Ok(())
 }
 
 pub async fn auth(repo_path: Option<String>, url: Option<String>) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
     repository.auth(url).await?;
+    Ok(())
+}
+
+pub fn diff(repo_path: Option<String>, staged: bool) -> anyhow::Result<()> {
+    let mut repository = Repository::open(repo_path)?;
+    DiffCommand::new(&mut repository, staged)?.run()?;
     Ok(())
 }

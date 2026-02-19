@@ -70,6 +70,9 @@ async fn main() -> anyhow::Result<()> {
         },
         Commands::Auth { url } => {
             commands::auth(repo_path, url).await?;
+        },
+        Commands::Diff { staged } => {
+            commands::diff(repo_path, staged)?;
         }
     }
 

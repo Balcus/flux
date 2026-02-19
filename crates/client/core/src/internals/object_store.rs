@@ -54,6 +54,11 @@ impl ObjectStore {
         }
     }
 
+    pub fn read_blob(&self, id: &str) -> Result<String> {
+        let blob = self.read_object(id)?;
+        Ok(String::from_utf8(blob.decompressed_content)?)
+    }
+
     pub fn raw_content(&self, hash: &str) -> Result<Vec<u8>> {
         let (dir, file) = hash.split_at(2);
         let object_path = self.path.join(dir).join(file);
@@ -197,5 +202,9 @@ impl ObjectStore {
             }
         }
         Ok(map)
+    }
+
+    pub fn short_id(&self, id: &String) -> String {
+        String::from(&id[0..7])
     }
 }

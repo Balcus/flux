@@ -1,7 +1,3 @@
-use flate2::Compression;
-use flate2::read::GzDecoder;
-use flate2::write::GzEncoder;
-use tar::Archive;
 use crate::error;
 use crate::internals::config::{Config, Field};
 use crate::internals::grpc_client::GrpcClient;
@@ -13,9 +9,13 @@ use crate::objects::blob::Blob;
 use crate::objects::commit::Commit;
 use crate::objects::object_type::{FluxObject, ObjectType};
 use crate::objects::tree::Tree;
+use flate2::Compression;
+use flate2::read::GzDecoder;
+use flate2::write::GzEncoder;
 use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+use tar::Archive;
 
 pub type Result<T> = std::result::Result<T, error::RepositoryError>;
 
@@ -335,6 +335,12 @@ impl Repository {
     }
 
     pub fn switch_branch(&mut self, name: &str, force: bool) -> Result<()> {
+        if !self.refs.exists(name) {
+            return Err(error::RepositoryError::Refs(
+                error::RefsError::MissingBranch(name.to_string()),
+            ));
+        }
+
         if self.has_uncommitted_changes() && !force {
             return Err(error::RepositoryError::UncommitedChanges);
         }
@@ -482,7 +488,24 @@ impl Repository {
         Ok(commit.hash())
     }
 
+    // TODO: new method to get the hash of the workspace
     fn has_uncommitted_changes(&self) -> bool {
-        !self.index.is_empty()
+        let Ok(head_commit_hash) = self.refs.head_commit() else {
+            return false;
+        };
+
+        let commit_obj = self
+            .object_store
+            .retrieve_object(&head_commit_hash)
+            .unwrap();
+        let commit = commit_obj.as_any().downcast_ref::<Commit>().unwrap();
+        let head_tree_hash = &commit.tree_hash;
+
+        let current_tree_hash = self
+            .work_tree
+            .build_tree_from_index(&self.index.map, &self.object_store)
+            .unwrap();
+
+        head_tree_hash != &current_tree_hash
     }
 }

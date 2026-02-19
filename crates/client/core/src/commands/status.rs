@@ -5,17 +5,21 @@ use crate::{
     status::{status_formatter::StatusFormatter, status_impl::Status},
 };
 
-pub struct StatusCommand;
+pub struct StatusCommand<'a> {
+    repo: &'a mut Repository
+}
 
-impl StatusCommand {
-    pub fn new() -> Self {
-        Self
+impl<'a> StatusCommand<'a> {
+    pub fn new(repo: &'a mut Repository) -> Self {
+        Self {
+            repo
+        }
     }
 }
 
-impl Command for StatusCommand {
-    fn run(&mut self, repo: &mut Repository) -> Result<()> {
-        let status = Status::new(repo)?;
+impl<'a> Command for StatusCommand<'a> {
+    fn run(&mut self) -> Result<()> {
+        let status = Status::new(&self.repo)?;
         let formatter = StatusFormatter::new(&status);
         formatter.print();
         Ok(())

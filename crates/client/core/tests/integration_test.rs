@@ -279,7 +279,6 @@ fn commit_without_credentials() {
     println!("{err}")
 }
 
-// TODO: this test is currently broken because the index is no longer cleared on commit and the test assumes it does
 #[test]
 #[serial]
 fn branching() {
@@ -370,6 +369,7 @@ fn branching_errors() {
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
     let mut repo = Repository::init(None, false).expect("Failed to initalize flux repository");
+
     let res = repo.delete_branch("main");
     let err = res.expect_err("Expected error when deleting main branch, found Ok()");
     assert!(matches!(
@@ -387,30 +387,30 @@ fn branching_errors() {
     println!("{err}");
 
     let res = repo.new_branch("main");
-    let err = res.expect_err("expected error when switching to non existent branch, found Ok()");
+    let err = res.expect_err("expected error when creating already existing branch, found Ok()");
     assert!(matches!(
         err,
         error::RepositoryError::Refs(error::RefsError::BranchAlreadyExists(..))
     ));
     println!("{err}");
 
-    fs::write(&repo.refs.head_path, "invalidate head").unwrap();
-    let res = repo.show_branches();
-    let err = res.expect_err("expected error when switching to non existent branch, found Ok()");
-    assert!(matches!(
-        err,
-        error::RepositoryError::Refs(error::RefsError::InvalidHead { .. })
-    ));
-    println!("{err}");
-
-    fs::remove_dir_all(repo.refs.refs_path).unwrap();
+    fs::remove_dir_all(&repo.refs.refs_path).unwrap();
     let res = Repository::open(None);
     let err = res.expect_err(
-        "expected error when opening repositroy after deleting refs folder but found Ok()",
+        "expected error when opening repository after deleting refs folder but found Ok()",
     );
     assert!(matches!(
         err,
         error::RepositoryError::Refs(error::RefsError::Io(..))
+    ));
+    println!("{err}");
+
+    fs::write(&repo.refs.head_path, "invalidate head").unwrap();
+    let res = repo.show_branches();
+    let err = res.expect_err("expected error with invalid HEAD, found Ok()");
+    assert!(matches!(
+        err,
+        error::RepositoryError::Refs(error::RefsError::InvalidHead { .. })
     ));
     println!("{err}");
 }

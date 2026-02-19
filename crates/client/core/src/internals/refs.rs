@@ -169,7 +169,7 @@ impl Refs {
     pub fn switch_branch(&mut self, to: &str) -> Result<()> {
         let path = self.refs_path.join("heads").join(to);
         if !path.is_file() {
-            return Err(error::RefsError::MissingBranch(to.to_string()))?;
+            return Err(error::RefsError::MissingBranch(to.to_string()));
         }
         self.set_head(to)?;
         Ok(())
@@ -222,5 +222,9 @@ impl Refs {
         }
 
         Ok(res)
+    }
+
+    pub fn exists(&self, name: &str) -> bool {
+        self.refs_path.join("heads").join(name).is_file()
     }
 }

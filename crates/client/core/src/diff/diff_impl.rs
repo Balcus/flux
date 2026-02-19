@@ -1,4 +1,4 @@
-use std::{error::Error, io::Read};
+use std::error::Error;
 
 #[derive(Debug)]
 pub enum EditType {
@@ -23,14 +23,11 @@ impl Edit {
     }
 }
 
-pub fn lines(f: &mut std::fs::File) -> Result<Vec<String>, Box<dyn Error>> {
-    let mut buf = String::new();
-    f.read_to_string(&mut buf)?;
-    Ok(buf.lines().map(String::from).collect())
-}
+pub fn diff(a: String, b: String) -> Result<Vec<Edit>, Box<dyn Error>> {
+    let a_lines: Vec<String> = a.lines().map(|l| l.to_string()).collect();
+    let b_lines: Vec<String> = b.lines().map(|l| l.to_string()).collect();
 
-pub fn diff(f1: &mut std::fs::File, f2: &mut std::fs::File) -> Result<(), Box<dyn Error>> {
-    Ok(Mayers::new(lines(f1)?, lines(f2)?).diff())
+    Ok(Mayers::new(a_lines, b_lines).diff())
 }
 
 pub struct Mayers {
@@ -43,7 +40,7 @@ impl Mayers {
         Self { a, b }
     }
 
-    pub fn diff(&self) {
+    pub fn diff(&self) -> Vec<Edit> {
         let mut edits = Vec::new();
 
         self.backtrack(|prev_x, prev_y, x, y| {
@@ -66,10 +63,7 @@ impl Mayers {
         });
 
         edits.reverse();
-
-        for edit in edits {
-            println!("{}", edit.to_string());
-        }
+        edits
     }
 
     fn backtrack<F>(&self, mut yield_move: F)
@@ -121,6 +115,10 @@ impl Mayers {
         let n = self.a.len() as i32;
         let m = self.b.len() as i32;
         let max = n + m;
+
+        if max == 0 {
+            return vec![];
+        }
 
         // The array will be split so that:
         // index 0 ->  k = -max

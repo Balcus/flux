@@ -71,6 +71,10 @@ impl Index {
         self.flush()
     }
 
+    pub fn get(&self, key: &str) -> Option<String> {
+        self.map.get(key).cloned()
+    }
+
     pub fn remove(&mut self, path: &str) -> Result<bool, error::IndexError> {
         let res = self.map.remove(path);
         self.flush()?;
