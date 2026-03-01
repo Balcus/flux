@@ -1,6 +1,6 @@
 use crate::{
     commands::Command,
-    diff,
+    diff::diff_impl::Mayers,
     internals::repository::Repository,
     status::status_impl::{ChangeType, Status},
 };
@@ -10,10 +10,9 @@ use std::fs;
 const NULL_ID: &str = "0000000";
 const NULL_PATH: &str = "dev/null";
 
-//TODO: error handling for commands
-// some standardized way to deal with the sort form of object ids
+//TODO: error handling for commands !!
+// some standardized way to deal with the short form of object ids
 // STOP IGNORING FILE MODES
-// split diffs into hunks
 #[derive(Debug)]
 struct Target {
     path: String,
@@ -94,13 +93,11 @@ impl<'a> DiffCommand<'a> {
         println!("--- {}", a.diff_path());
         println!("+++ {}", b.diff_path());
 
-        let a_data = a.data.clone().unwrap_or_default();
-        let b_data = b.data.clone().unwrap_or_default();
+        let a_data = a.data.as_deref().unwrap_or("");
+        let b_data = b.data.as_deref().unwrap_or("");
 
-        let diffs = diff::diff_impl::diff(a_data, b_data).unwrap();
-        for diff in diffs {
-            println!("{}", diff.to_string())
-        }
+        let hunks = Mayers::diff_hunks(a_data, b_data);
+        hunks.iter().for_each(|hunk| println!("{hunk}"));
     }
 
     fn from_index(&self, path: &str) -> Target {

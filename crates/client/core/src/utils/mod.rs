@@ -6,6 +6,8 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
+pub mod colors;
+
 pub struct GenericObject {
     pub object_type: ObjectType,
     pub size: usize,

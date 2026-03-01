@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 
-use crate::status::status_impl::{ChangeType, Status};
+use crate::{status::status_impl::{ChangeType, Status}, utils::colors::{GREEN, RED, RESET, YELLOW}};
 
 pub struct StatusFormatter<'a> {
     changes: &'a Status,
 }
 
-// TODO: use a library for the colored output
 impl<'a> StatusFormatter<'a> {
     pub fn new(changes: &'a Status) -> Self {
         Self { changes }
@@ -14,7 +13,7 @@ impl<'a> StatusFormatter<'a> {
 
     pub fn print(&self) {
         if self.changes.is_clean() {
-            println!("nothing to commit, working tree clean");
+            println!("Nothing to commit, working tree clean");
             return;
         }
 
@@ -33,7 +32,7 @@ impl<'a> StatusFormatter<'a> {
             println!("\nUntracked files:");
             println!("  (use \"flux add <file>...\" to track)\n");
             for file in &self.changes.untracked {
-                println!("  \x1b[31m{}\x1b[0m", file);
+                println!("  {}{}{}", RED, file, RESET);
             }
         }
     }
@@ -43,19 +42,19 @@ impl<'a> StatusFormatter<'a> {
             &self.changes.index_changes,
             "new file",
             ChangeType::Added,
-            "\x1b[32m",
+            GREEN,
         );
         self.print_change_group(
             &self.changes.index_changes,
             "modified",
             ChangeType::Modified,
-            "\x1b[32m",
+            YELLOW,
         );
         self.print_change_group(
             &self.changes.index_changes,
             "deleted",
             ChangeType::Deleted,
-            "\x1b[32m",
+            GREEN,
         );
     }
 
@@ -64,13 +63,13 @@ impl<'a> StatusFormatter<'a> {
             &self.changes.workspace_changes,
             "modified",
             ChangeType::Modified,
-            "\x1b[31m",
+            RED,
         );
         self.print_change_group(
             &self.changes.workspace_changes,
             "deleted",
             ChangeType::Deleted,
-            "\x1b[31m",
+            RED,
         );
     }
 
@@ -90,7 +89,7 @@ impl<'a> StatusFormatter<'a> {
         if !files.is_empty() {
             files.sort();
             for file in files {
-                println!("  {}{}: {}\x1b[0m", color, label, file);
+                println!("  {}{}: {}{}", color, label, file, RESET);
             }
         }
     }

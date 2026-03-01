@@ -1,63 +1,51 @@
-use std::error::Error;
-
-#[derive(Debug)]
-pub enum EditType {
-    Insertion,
-    Deletion,
-    Equal,
-}
-
-pub struct Edit {
-    pub edit_type: EditType,
-    pub text: String,
-}
-
-impl Edit {
-    pub fn to_string(&self) -> String {
-        let symbol = match self.edit_type {
-            EditType::Insertion => "+",
-            EditType::Deletion => "-",
-            EditType::Equal => " ",
-        };
-        format!("{} {}", symbol, self.text)
-    }
-}
-
-pub fn diff(a: String, b: String) -> Result<Vec<Edit>, Box<dyn Error>> {
-    let a_lines: Vec<String> = a.lines().map(|l| l.to_string()).collect();
-    let b_lines: Vec<String> = b.lines().map(|l| l.to_string()).collect();
-
-    Ok(Mayers::new(a_lines, b_lines).diff())
-}
+use crate::diff::{
+    edit::{Edit, EditType},
+    hunk::Hunk,
+    line::Line,
+};
 
 pub struct Mayers {
-    a: Vec<String>,
-    b: Vec<String>,
+    a: Vec<Line>,
+    b: Vec<Line>,
 }
 
 impl Mayers {
-    pub fn new(a: Vec<String>, b: Vec<String>) -> Self {
+    pub fn new(a: Vec<Line>, b: Vec<Line>) -> Self {
         Self { a, b }
+    }
+
+    pub fn diff_hunks(a: &str, b: &str) -> Vec<Hunk> {
+        let a_lines = Line::lines(a);
+        let b_lines = Line::lines(b);
+
+        let mayers = Mayers::new(a_lines, b_lines);
+        Hunk::filter(mayers.diff())
     }
 
     pub fn diff(&self) -> Vec<Edit> {
         let mut edits = Vec::new();
 
         self.backtrack(|prev_x, prev_y, x, y| {
+            let a_idx = prev_x as usize;
+            let b_idx = prev_y as usize;
+
             if x == prev_x {
                 edits.push(Edit {
                     edit_type: EditType::Insertion,
-                    text: self.b[prev_y as usize].clone(),
+                    a_line: None,
+                    b_line: Some(self.b[b_idx].clone()),
                 });
             } else if y == prev_y {
                 edits.push(Edit {
                     edit_type: EditType::Deletion,
-                    text: self.a[prev_x as usize].clone(),
+                    a_line: Some(self.a[a_idx].clone()),
+                    b_line: None,
                 });
             } else {
                 edits.push(Edit {
                     edit_type: EditType::Equal,
-                    text: self.a[prev_x as usize].clone(),
+                    a_line: Some(self.a[a_idx].clone()),
+                    b_line: Some(self.b[b_idx as usize].clone()),
                 });
             }
         });
@@ -151,7 +139,7 @@ impl Mayers {
                 let mut y = x - k;
 
                 // if the letters from a and b match we move diagonally
-                while x < n && y < m && (self.a[x as usize] == self.b[y as usize]) {
+                while x < n && y < m && (self.a[x as usize].text == self.b[y as usize].text) {
                     x += 1;
                     y += 1;
                 }

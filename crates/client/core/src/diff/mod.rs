@@ -1,2 +1,4 @@
 pub mod diff_impl;
-pub mod diff_formatter;
+mod edit;
+mod hunk;
+mod line;

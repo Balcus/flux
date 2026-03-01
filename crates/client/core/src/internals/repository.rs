@@ -30,6 +30,18 @@ pub struct Repository {
     pub object_store: ObjectStore,
 }
 
+//TODO:
+/*
+* Commands as classes for all supported commands
+* Error handling for commands as classes
+* Unit and integration tests for both client and server !!
+* Add all supported commands to desktop app
+* Object ids and functional shorthand for them
+* File mode and executables
+* Simplified cli interface
+* Review branching
+* Merging
+*/
 impl Repository {
     pub fn init(path: Option<String>, force: bool) -> Result<Self> {
         let work_tree_path = path
@@ -488,7 +500,6 @@ impl Repository {
         Ok(commit.hash())
     }
 
-    // TODO: new method to get the hash of the workspace
     fn has_uncommitted_changes(&self) -> bool {
         let Ok(head_commit_hash) = self.refs.head_commit() else {
             return false;
