@@ -68,7 +68,7 @@ impl UserStore {
         access_token: String,
     ) -> bool {
         if let Some(entry) = self.map.get(&user_email) {
-            return entry.access_token == access_token && entry.user_name == user_name;
+            entry.access_token == access_token && entry.user_name == user_name
         } else {
             false
         }

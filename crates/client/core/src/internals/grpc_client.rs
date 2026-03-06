@@ -80,7 +80,7 @@ impl GrpcClient {
             .auth_client
             .issue_token(request)
             .await
-            .map_err(|e| error::GrpcClientError::Auth(e))?;
+            .map_err(error::GrpcClientError::Auth)?;
 
         Ok(response.into_inner())
     }

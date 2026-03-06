@@ -1,7 +1,14 @@
 use flux_core::{
-    commands::{Command, diff::DiffCommand, status::StatusCommand},
+    commands::{
+        command::Command, diff::DiffCommand, hash_object::HashObject, init::InitCommand,
+        status::StatusCommand,
+    },
     internals::repository::Repository,
 };
+
+pub fn init(path: Option<String>, force: bool) -> anyhow::Result<()> {
+    InitCommand::new(path, force).run()
+}
 
 pub fn set(repo_path: Option<String>, key: String, value: String) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
@@ -15,11 +22,9 @@ pub fn cat_file(repo_path: Option<String>, hash: String) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn hash_object(repo_path: Option<String>, path: String, write: bool) -> anyhow::Result<String> {
-    let repository = Repository::open(repo_path)?;
-    let hash = repository.hash_object(path, write)?;
-    println!("{hash}");
-    Ok(hash)
+pub fn hash_object(path: String, write: bool) -> anyhow::Result<()> {
+    HashObject::new(&path, write).run()?;
+    Ok(())
 }
 
 pub fn commit_tree(

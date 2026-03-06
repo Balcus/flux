@@ -37,14 +37,14 @@ impl ObjectStore {
     }
 
     pub fn store(&self, object: &dyn FluxObject) -> Result<()> {
-        self.store_object(&object.hash(), &object.serialize())?;
+        self.store_object(&object.id(), &object.serialize())?;
         Ok(())
     }
 
     pub fn retrieve_object(&self, hash: &str) -> Result<Box<dyn FluxObject>> {
         let object = self.read_object(hash)?;
         match object.object_type {
-            ObjectType::Blob => Ok(Box::new(Blob::from_content(object.decompressed_content))),
+            ObjectType::Blob => Ok(Box::new(Blob::from_bytes(object.decompressed_content))),
             ObjectType::Tree => Ok(Box::new(Tree::from_content(object.decompressed_content))),
             ObjectType::Commit => Ok(Box::new(Commit::from_content(object.decompressed_content))),
             ObjectType::Tag => Err(error::ObjectError::Unsupported {
@@ -169,13 +169,13 @@ impl ObjectStore {
         let commit = obj
             .as_any()
             .downcast_ref::<Commit>()
-            .ok_or_else(|| error::ObjectStoreError::Downcast { expected: "commit" })?;
+            .ok_or(error::ObjectStoreError::Downcast { expected: "commit" })?;
 
         let obj = self.retrieve_object(&commit.tree_hash)?;
         let tree = obj
             .as_any()
             .downcast_ref::<Tree>()
-            .ok_or_else(|| error::ObjectStoreError::Downcast { expected: "tree" })?;
+            .ok_or(error::ObjectStoreError::Downcast { expected: "tree" })?;
 
         self.tree_to_map(tree, "")
     }
@@ -194,7 +194,7 @@ impl ObjectStore {
                 let subtree = obj
                     .as_any()
                     .downcast_ref::<Tree>()
-                    .ok_or_else(|| error::ObjectStoreError::Downcast { expected: "tree" })?;
+                    .ok_or(error::ObjectStoreError::Downcast { expected: "tree" })?;
                 let submap = self.tree_to_map(subtree, &format!("{}/", full_path))?;
                 map.extend(submap);
             } else {

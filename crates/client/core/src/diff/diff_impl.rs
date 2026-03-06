@@ -45,7 +45,7 @@ impl Mayers {
                 edits.push(Edit {
                     edit_type: EditType::Equal,
                     a_line: Some(self.a[a_idx].clone()),
-                    b_line: Some(self.b[b_idx as usize].clone()),
+                    b_line: Some(self.b[b_idx].clone()),
                 });
             }
         });

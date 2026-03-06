@@ -139,14 +139,12 @@ pub enum Commands {
         url: String,
         path: Option<String>,
     },
-    Status {
-        
-    },
+    Status {},
     Auth {
         url: Option<String>,
     },
     Diff {
         #[arg(long = "staged")]
-        staged: bool
-    }
+        staged: bool,
+    },
 }

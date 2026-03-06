@@ -1,5 +1,5 @@
 use crate::{
-    commands::Command,
+    commands::{command::Command, hash_object::HashObject},
     diff::diff_impl::Mayers,
     internals::repository::Repository,
     status::status_impl::{ChangeType, Status},
@@ -84,10 +84,10 @@ impl<'a> DiffCommand<'a> {
             return;
         }
         let mut id_range = format!("index {}..{}", a.id, b.id);
-        if a.mode == b.mode {
-            if let Some(mode) = &a.mode {
-                id_range.push_str(&format!(" {}", mode));
-            }
+        if a.mode == b.mode
+            && let Some(mode) = &a.mode
+        {
+            id_range.push_str(&format!(" {}", mode));
         }
         println!("{}", id_range);
         println!("--- {}", a.diff_path());
@@ -112,8 +112,8 @@ impl<'a> DiffCommand<'a> {
         let id = self
             .repo
             .object_store
-            .short_id(&self.repo.hash_object(path.to_string(), false).unwrap());
-        let data = fs::read_to_string(&path).ok();
+            .short_id(&HashObject::new(path, false).hash(None).unwrap());
+        let data = fs::read_to_string(path).ok();
         let mode = Some("100644".to_string());
         Target::new(path.to_string(), id, mode, data)
     }

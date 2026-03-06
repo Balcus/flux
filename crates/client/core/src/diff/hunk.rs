@@ -1,4 +1,10 @@
-use crate::{diff::{edit::{Edit, EditType}, line::Line}, utils::colors::{CYAN, GREEN, RED, RESET}};
+use crate::{
+    diff::{
+        edit::{Edit, EditType},
+        line::Line,
+    },
+    utils::colors::{CYAN, GREEN, RED, RESET},
+};
 use std::fmt;
 
 const HUNK_CONTEXT: usize = 5;
@@ -23,8 +29,16 @@ impl Hunk {
             }
 
             let hunk_start = offset.saturating_sub(HUNK_CONTEXT);
-            let a_start = edits[hunk_start].a_line.as_ref().map(|l| l.number).unwrap_or(0);
-            let b_start = edits[hunk_start].b_line.as_ref().map(|l| l.number).unwrap_or(0);
+            let a_start = edits[hunk_start]
+                .a_line
+                .as_ref()
+                .map(|l| l.number)
+                .unwrap_or(0);
+            let b_start = edits[hunk_start]
+                .b_line
+                .as_ref()
+                .map(|l| l.number)
+                .unwrap_or(0);
 
             let mut hunk = Hunk {
                 a_start,
@@ -86,7 +100,7 @@ impl fmt::Display for Hunk {
             match edit.edit_type {
                 EditType::Equal => writeln!(f, "{}", edit)?,
                 EditType::Insertion => writeln!(f, "{}{}{}", GREEN, edit, RESET)?,
-                EditType::Deletion => writeln!(f, "{}{}{}", RED, edit, RESET)?
+                EditType::Deletion => writeln!(f, "{}{}{}", RED, edit, RESET)?,
             }
         }
         Ok(())

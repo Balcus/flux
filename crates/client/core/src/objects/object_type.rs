@@ -1,10 +1,9 @@
 use std::{any::Any, fmt};
 
-pub trait FluxObject {
+pub trait FluxObject: fmt::Display {
     fn object_type(&self) -> ObjectType;
-    fn hash(&self) -> String;
+    fn id(&self) -> String;
     fn serialize(&self) -> Vec<u8>;
-    fn print(&self);
     fn as_any(&self) -> &dyn Any;
     fn content(&self) -> Vec<u8>;
 }

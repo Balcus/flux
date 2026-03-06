@@ -50,7 +50,9 @@ impl AuthServiec for FluxAuthService {
             .await
             .add_user(req.user_name, req.user_email, token.clone())
             .await
-            .map_err(|e| Status::internal(format!("Failed to add user to remote user store. {e}")))?;
+            .map_err(|e| {
+                Status::internal(format!("Failed to add user to remote user store. {e}"))
+            })?;
 
         Ok(tonic::Response::new(proto::models::IssueTokenResponse {
             access_token: token,

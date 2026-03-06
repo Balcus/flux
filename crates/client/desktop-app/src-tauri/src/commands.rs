@@ -1,5 +1,11 @@
-use crate::{AppState, models::{BranchInfo, RepositoryInfo}};
-use flux_core::{error::{ConfigError, RefsError}, internals::repository::Repository};
+use crate::{
+    models::{BranchInfo, RepositoryInfo},
+    AppState,
+};
+use flux_core::{
+    error::{ConfigError, RefsError},
+    internals::repository::Repository,
+};
 use tauri::State;
 
 #[tauri::command]
@@ -37,10 +43,14 @@ pub fn update_user_config(
     let repo = repo_lock
         .as_mut()
         .ok_or_else(|| "No repository open".to_string())?;
-    
-    repo.config.set("user_name".to_string(), user_name).map_err(|e: ConfigError| e.to_string())?;
-    repo.config.set("user_email".to_string(), user_email).map_err(|e: ConfigError| e.to_string())?;
-    
+
+    repo.config
+        .set("user_name".to_string(), user_name)
+        .map_err(|e: ConfigError| e.to_string())?;
+    repo.config
+        .set("user_email".to_string(), user_email)
+        .map_err(|e: ConfigError| e.to_string())?;
+
     Ok(())
 }
 
@@ -50,9 +60,11 @@ pub fn update_origin(origin: String, state: State<AppState>) -> Result<(), Strin
     let repo = repo_lock
         .as_mut()
         .ok_or_else(|| "No repository open".to_string())?;
-    
-    repo.config.set("origin".to_string(), origin).map_err(|e: ConfigError| e.to_string())?;
-    
+
+    repo.config
+        .set("origin".to_string(), origin)
+        .map_err(|e: ConfigError| e.to_string())?;
+
     Ok(())
 }
 
@@ -62,8 +74,11 @@ pub fn get_branches(state: State<AppState>) -> Result<Vec<BranchInfo>, String> {
     let repo = repo_lock
         .as_ref()
         .ok_or_else(|| "No repository open".to_string())?;
-    
-    let current = repo.refs.current_branch().map_err(|e: RefsError| e.to_string())?;
+
+    let current = repo
+        .refs
+        .current_branch()
+        .map_err(|e: RefsError| e.to_string())?;
     let mut branches: Vec<BranchInfo> = repo
         .refs
         .branch_names()
@@ -73,7 +88,7 @@ pub fn get_branches(state: State<AppState>) -> Result<Vec<BranchInfo>, String> {
             name,
         })
         .collect();
-    
+
     branches.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(branches)
 }

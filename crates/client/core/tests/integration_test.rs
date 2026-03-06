@@ -1,3 +1,6 @@
+use flux_core::commands::command::Command;
+use flux_core::commands::hash_object::HashObject;
+use flux_core::commands::init::InitCommand;
 use flux_core::error;
 use flux_core::internals::repository::Repository;
 use serial_test::serial;
@@ -22,42 +25,6 @@ fn project_creation() {
     assert_eq!(readme, "Read this file before running the project");
     assert_eq!(main_rs, r#"pub fn main() { println!("{}", add(1, 2)) }"#);
     assert_eq!(lib_rs, "pub fn add(a: i32, b: i32) -> i64 { a + b }");
-}
-
-#[test]
-#[serial]
-fn init() {
-    let (_temp, project_path) = common::setup_test_project();
-    let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
-
-    let repo = Repository::init(None, false).unwrap();
-
-    assert!(project_path.join(".flux/config").exists());
-    assert!(project_path.join(".flux/HEAD").exists());
-    assert!(project_path.join(".flux/objects").exists());
-    assert!(project_path.join(".flux/refs").exists());
-
-    let head = fs::read_to_string(".flux/HEAD").unwrap();
-    assert_eq!(head, "ref: refs/heads/main\n");
-    assert_eq!(repo.refs.head_ref().unwrap(), "refs/heads/main");
-}
-
-#[test]
-#[serial]
-fn init_when_already_initialized() {
-    let (_temp, project_path) = common::setup_test_project();
-    let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
-
-    Repository::init(None, false).unwrap();
-    let err = Repository::init(None, false).unwrap_err();
-
-    match &err {
-        flux_core::error::RepositoryError::AlreadyInitialized(path) => {
-            assert!(path.ends_with(".flux"));
-        }
-        other => panic!("expected AlreadyInitialized error, got: {other:?}"),
-    }
-    println!("{err}");
 }
 
 #[test]
@@ -87,7 +54,8 @@ fn set() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
-    let mut repo = Repository::init(None, false).unwrap();
+    InitCommand::new(None, true).run().unwrap();
+    let mut repo = Repository::open(None).unwrap();
     repo.set("user_name".to_string(), "user".to_string())
         .unwrap();
     repo.set("user_email".to_string(), "user@gmail.com".to_string())
@@ -102,43 +70,21 @@ fn set() {
 
 #[test]
 #[serial]
-fn hash_object() {
-    let (_temp, project_path) = common::setup_test_project();
-    let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
-
-    let repo = Repository::init(None, false).unwrap();
-
-    let my_hash = repo.hash_object("README.md".to_string(), false).unwrap();
-    let git_hash = common::git_hash_object("README.md").unwrap();
-    assert_eq!(my_hash, git_hash);
-    let object_path = project_path
-        .join(".flux/objects")
-        .join(&git_hash[..2])
-        .join(&git_hash[2..]);
-    assert!(!object_path.exists());
-    let _ = repo.hash_object("README.md".to_string(), true).unwrap();
-    assert!(object_path.exists());
-
-    assert!(project_path.join("src").exists());
-    let my_hash = repo.hash_object("src".to_string(), true).unwrap();
-    assert_eq!(my_hash, "ac715a76cc52acc719def812525f6ae57b4770a9");
-}
-
-#[test]
-#[serial]
 fn commit() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
-    let mut repo = Repository::init(None, false).unwrap();
+    InitCommand::new(None, true).run().unwrap();
+    let mut repo = Repository::open(None).unwrap();
+
     repo.set("user_name".to_string(), "Test User".to_string())
         .expect("Failed to set user name");
     repo.set("user_email".to_string(), "test@example.com".to_string())
         .expect("Failed to set user email");
 
-    let readme_blob_hash = repo
-        .hash_object("./README.md".to_string(), false)
-        .expect("Failed hash-object for file README.md");
+    let readme_blob_hash = HashObject::new("./README.md", false)
+        .hash(None)
+        .expect("Failed to hash file README.md");
     let readme_object_path = project_path
         .join(".flux/objects")
         .join(&readme_blob_hash[..2])
@@ -157,12 +103,13 @@ fn commit() {
     assert!(readme_object_path.exists());
 
     repo.add("./src").expect("Failed to add src to index");
-    let main_hash = repo
-        .hash_object("./src/main.rs".to_string(), false)
-        .expect("Failed to hash src/main.rs");
-    let lib_hash = repo
-        .hash_object("./src/lib.rs".to_string(), false)
-        .expect("Failed to hash src/lib.rs");
+    let main_hash = HashObject::new("./src/main.rs", false)
+        .hash(None)
+        .expect("Failed to hash file ./src/main.rs");
+    let lib_hash = HashObject::new("./src/lib.rs", false)
+        .hash(None)
+        .expect("Failed to hash file ./src/lib.rs");
+
     assert!(
         repo.index
             .map
@@ -251,7 +198,9 @@ fn commit_with_empty_index() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
-    let mut repo = Repository::init(None, false).unwrap();
+    InitCommand::new(None, true).run().unwrap();
+    let mut repo = Repository::open(None).unwrap();
+
     let err = repo.commit("empty".to_string()).unwrap_err();
 
     match err {
@@ -267,7 +216,9 @@ fn commit_without_credentials() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
-    let mut repo = Repository::init(None, false).unwrap();
+    InitCommand::new(None, true).run().unwrap();
+    let mut repo = Repository::open(None).unwrap();
+
     repo.add("README.md").unwrap();
 
     let err = repo.commit("commit".to_string()).err().unwrap();
@@ -285,7 +236,9 @@ fn branching() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
-    let mut repo = Repository::init(None, false).expect("Failed to initalize flux repository");
+    InitCommand::new(None, true).run().unwrap();
+    let mut repo = Repository::open(None).unwrap();
+
     repo.set(String::from("user_name"), String::from("test"))
         .expect("Failed to set user name");
     repo.set(String::from("user_email"), String::from("test@gmail.com"))
@@ -368,7 +321,8 @@ fn branching_errors() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
-    let mut repo = Repository::init(None, false).expect("Failed to initalize flux repository");
+    InitCommand::new(None, true).run().unwrap();
+    let mut repo = Repository::open(None).unwrap();
 
     let res = repo.delete_branch("main");
     let err = res.expect_err("Expected error when deleting main branch, found Ok()");

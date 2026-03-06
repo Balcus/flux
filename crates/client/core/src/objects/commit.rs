@@ -1,10 +1,9 @@
-use std::any::Any;
-
+use super::object_type::ObjectType;
 use crate::objects::object_type::FluxObject;
 use crate::utils;
-
-use super::object_type::ObjectType;
 use chrono::Local;
+use std::any::Any;
+use std::fmt;
 
 pub struct Commit {
     parent_hash: Option<String>,
@@ -84,7 +83,7 @@ impl FluxObject for Commit {
         ObjectType::Commit
     }
 
-    fn hash(&self) -> String {
+    fn id(&self) -> String {
         let header = format!("commit {}\0", self.content.len());
         let mut full = Vec::new();
         full.extend_from_slice(header.as_bytes());
@@ -100,15 +99,17 @@ impl FluxObject for Commit {
         utils::compress(&full)
     }
 
-    fn print(&self) {
-        println!("{}", self.to_string())
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn content(&self) -> Vec<u8> {
         self.content.clone()
+    }
+}
+
+impl fmt::Display for Commit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string())
     }
 }

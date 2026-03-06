@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use crate::cli::Cli;
 use crate::services::auth_service::FluxAuthService;
 use crate::services::clone_service::FluxCloneService;
@@ -8,13 +7,14 @@ use clap::Parser;
 use proto::models::auth_serviec_server::AuthServiecServer;
 use proto::models::clone_service_server::CloneServiceServer;
 use proto::models::push_service_server::PushServiceServer;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::transport::Server;
 
 mod cli;
+mod error;
 mod services;
 mod user_store;
-mod error;
 
 // TODO: Save token for each user on server and check request so the tokens match
 // THIS NEEDS SOME BIG CLEANING AFTER IT IS DONE

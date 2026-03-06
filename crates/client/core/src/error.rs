@@ -1,7 +1,8 @@
 use hex::FromHexError;
 use std::{
     io,
-    path::{Path, PathBuf}, string::FromUtf8Error,
+    path::{Path, PathBuf},
+    string::FromUtf8Error,
 };
 use thiserror::Error;
 
@@ -133,7 +134,7 @@ pub enum ObjectStoreError {
     Downcast { expected: &'static str },
 
     #[error("Invalid encoding for object content")]
-    InvalidEncoding(#[from] FromUtf8Error)
+    InvalidEncoding(#[from] FromUtf8Error),
 }
 
 #[derive(Debug, Error)]
@@ -216,7 +217,7 @@ pub enum GrpcClientError {
     Clone(#[source] tonic::Status),
 
     #[error("Failed authentication for remote server.")]
-    Auth(#[source] tonic::Status)
+    Auth(#[source] tonic::Status),
 }
 
 #[derive(Debug, Error)]
@@ -290,6 +291,16 @@ impl RepositoryError {
         RepositoryError::Other {
             context,
             source: Box::new(err),
+        }
+    }
+
+    pub fn from_boxed(
+        context: &'static str,
+        err: Box<dyn std::error::Error + Send + Sync>,
+    ) -> Self {
+        RepositoryError::Other {
+            context,
+            source: err,
         }
     }
 }

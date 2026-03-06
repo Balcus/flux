@@ -2,6 +2,7 @@ use crate::objects::object_type::ObjectType;
 use flate2::{Compression, bufread::ZlibDecoder, write::ZlibEncoder};
 use sha1::{Digest, Sha1};
 use std::{
+    fs::File,
     io::{Read, Write},
     path::{Component, Path, PathBuf},
 };
@@ -12,6 +13,13 @@ pub struct GenericObject {
     pub object_type: ObjectType,
     pub size: usize,
     pub decompressed_content: Vec<u8>,
+}
+
+pub fn read_bytes_from_file<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<u8>> {
+    let mut file = File::open(path)?;
+    let mut data = Vec::new();
+    file.read_to_end(&mut data)?;
+    Ok(data)
 }
 
 /// Decompresses zlib-compressed data using the DEFLATE algorithm.

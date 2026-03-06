@@ -110,7 +110,7 @@ impl WorkTree {
                     .downcast_ref::<Blob>()
                     .ok_or(error::WorkTreeError::Downcast { expected: "blob" })?;
 
-                let blob_content = blob.to_string();
+                let blob_content = blob.as_string();
                 fs::write(&target_path, blob_content.as_bytes()).map_err(|e| {
                     error::IoError::Write {
                         path: target_path.clone(),
@@ -215,7 +215,7 @@ impl WorkTree {
                 let tree = Tree::from_content(tree_content);
                 object_store.store(&tree)?;
 
-                Ok(tree.hash())
+                Ok(tree.id())
             }
         }
     }

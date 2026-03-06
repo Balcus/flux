@@ -1,10 +1,9 @@
+use super::object_type::ObjectType;
 use crate::{
     objects::{blob::Blob, object_type::FluxObject},
-    utils,
+    utils::{self, read_bytes_from_file},
 };
-
-use super::object_type::ObjectType;
-use std::{any::Any, collections::HashMap, fs, path::Path};
+use std::{any::Any, collections::HashMap, fmt, fs, path::Path};
 
 pub struct TreeEntry {
     pub mode: String,
@@ -18,7 +17,7 @@ impl TreeEntry {
     }
 
     pub fn is_file(&self) -> bool {
-        !(self.mode == "040000")
+        self.mode != "040000"
     }
 }
 
@@ -27,12 +26,12 @@ pub struct Tree {
 }
 
 impl Tree {
-    pub fn new(dir: &Path) -> Self {
+    pub fn new(dir: &Path) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let mut entries = Vec::new();
         let dir_iter = fs::read_dir(dir).expect("Could not read directory contents");
 
         for entry in dir_iter {
-            let entry = entry.expect("Could not read directory entry");
+            let entry = entry?;
             let path = entry.path();
 
             if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
@@ -44,8 +43,10 @@ impl Tree {
                 let name = name.to_string();
 
                 if metadata.is_file() {
-                    let blob = Blob::new(&path);
-                    let hash = blob.hash();
+                    let data = read_bytes_from_file(&path)?;
+                    let blob = Blob::from_bytes(data);
+
+                    let hash = blob.id();
 
                     entries.push(TreeEntry {
                         mode: "100644".to_string(),
@@ -53,8 +54,8 @@ impl Tree {
                         name,
                     });
                 } else if metadata.is_dir() {
-                    let subtree = Tree::new(&path);
-                    let hash = subtree.hash();
+                    let subtree = Tree::new(&path)?;
+                    let hash = subtree.id();
 
                     entries.push(TreeEntry {
                         mode: "040000".to_string(),
@@ -66,7 +67,7 @@ impl Tree {
         }
 
         let content = Self::build_content(entries);
-        Self { content }
+        Ok(Self { content })
     }
 
     pub fn from_content(content: Vec<u8>) -> Self {
@@ -191,7 +192,7 @@ impl FluxObject for Tree {
         ObjectType::Tree
     }
 
-    fn hash(&self) -> String {
+    fn id(&self) -> String {
         let header = format!("tree {}\0", self.content.len());
         let mut full = Vec::new();
         full.extend_from_slice(header.as_bytes());
@@ -207,15 +208,125 @@ impl FluxObject for Tree {
         utils::compress(&full)
     }
 
-    fn print(&self) {
-        print!("{}", self.to_string());
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn content(&self) -> Vec<u8> {
         self.content.clone()
+    }
+}
+
+impl fmt::Display for Tree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::Result;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn tree_from_directory() -> Result<()> {
+        let dir = tempdir()?;
+        fs::write(dir.path().join("a.txt"), "file a")?;
+        fs::write(dir.path().join("b.txt"), "file b")?;
+
+        let tree = Tree::new(dir.path()).unwrap();
+        let entries = tree.entries();
+
+        assert_eq!(entries.len(), 2);
+        assert!(entries.iter().all(|e| e.is_file()));
+        assert!(entries.iter().any(|e| e.name == "a.txt"));
+        assert!(entries.iter().any(|e| e.name == "b.txt"));
+        assert_eq!(tree.object_type(), ObjectType::Tree);
+
+        Ok(())
+    }
+
+    #[test]
+    fn tree_entries_are_sorted() -> Result<()> {
+        let dir = tempdir()?;
+        fs::write(dir.path().join("z.txt"), "z")?;
+        fs::write(dir.path().join("a.txt"), "a")?;
+        fs::write(dir.path().join("m.txt"), "m")?;
+
+        let tree = Tree::new(dir.path()).unwrap();
+        let entries = tree.entries();
+        let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+
+        assert_eq!(names, vec!["a.txt", "m.txt", "z.txt"]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn tree_with_subtree() -> Result<()> {
+        let dir = tempdir()?;
+        fs::write(dir.path().join("root.txt"), "root")?;
+        fs::create_dir(dir.path().join("subdir"))?;
+        fs::write(dir.path().join("subdir/child.txt"), "child")?;
+
+        let tree = Tree::new(dir.path()).unwrap();
+        let entries = tree.entries();
+
+        let file_entry = entries.iter().find(|e| e.name == "root.txt").unwrap();
+        let dir_entry = entries.iter().find(|e| e.name == "subdir").unwrap();
+
+        assert!(file_entry.is_file());
+        assert!(dir_entry.is_dir());
+        assert_eq!(dir_entry.mode, "040000");
+
+        Ok(())
+    }
+
+    #[test]
+    fn tree_id_changes_with_content() -> Result<()> {
+        let dir1 = tempdir()?;
+        let dir2 = tempdir()?;
+        fs::write(dir1.path().join("file.txt"), "version one")?;
+        fs::write(dir2.path().join("file.txt"), "version two")?;
+
+        let tree1 = Tree::new(dir1.path()).unwrap();
+        let tree2 = Tree::new(dir2.path()).unwrap();
+
+        assert_ne!(tree1.id(), tree2.id());
+
+        Ok(())
+    }
+
+    #[test]
+    fn tree_skips_hidden_files() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let dir = tempdir()?;
+        fs::write(dir.path().join("visible.txt"), "visible")?;
+        fs::write(dir.path().join(".hidden"), "hidden")?;
+        fs::create_dir(dir.path().join(".flux"))?;
+
+        let tree = Tree::new(dir.path())?;
+        let entries = tree.entries();
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "visible.txt");
+
+        Ok(())
+    }
+
+    #[test]
+    fn tree_from_index() {
+        let mut index = HashMap::new();
+        let blob = Blob::new("hello");
+        index.insert("src/main.rs".to_string(), blob.id());
+
+        let tree = Tree::from_index(&index);
+        let entries = tree.entries();
+
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].name, "main.rs");
+        assert_eq!(entries[0].hash, blob.id());
+        assert_eq!(entries[0].mode, "100644");
     }
 }

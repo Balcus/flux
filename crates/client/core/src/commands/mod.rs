@@ -1,8 +1,5 @@
-use anyhow::Result;
-
+pub mod command;
 pub mod diff;
+pub mod hash_object;
+pub mod init;
 pub mod status;
-
-pub trait Command {
-    fn run(&mut self) -> Result<()>;
-}

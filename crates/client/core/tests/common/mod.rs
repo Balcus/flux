@@ -1,8 +1,6 @@
-use anyhow::Context;
 use std::{
     env, fs,
     path::{Path, PathBuf},
-    process::Command,
 };
 use tempfile::TempDir;
 
@@ -49,20 +47,4 @@ pub fn setup_test_project() -> (TempDir, PathBuf) {
     .unwrap();
 
     (temp, project_path)
-}
-
-pub fn git_hash_object(path: &str) -> anyhow::Result<String> {
-    let output = Command::new("git")
-        .args(["hash-object", "--no-filters", path])
-        .output()
-        .context("Failed to execute git hash-object")?;
-
-    if !output.status.success() {
-        anyhow::bail!(
-            "git hash-object failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
