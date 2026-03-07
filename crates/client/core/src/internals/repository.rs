@@ -7,7 +7,8 @@ use crate::internals::refs::Refs;
 use crate::internals::work_tree::WorkTree;
 use crate::objects::blob::Blob;
 use crate::objects::commit::Commit;
-use crate::objects::object_type::{FluxObject, ObjectType};
+use crate::objects::object::Object;
+use crate::objects::object_type::ObjectType;
 use crate::utils::read_bytes_from_file;
 use flate2::Compression;
 use flate2::read::GzDecoder;
@@ -260,7 +261,7 @@ impl Repository {
         let hash = commit.id();
         self.refs.update_head(&hash)?;
 
-        Ok(hash)
+        Ok(hash.to_string())
     }
 
     pub fn log(&self, _reference: Option<String>) -> Result<()> {

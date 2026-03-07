@@ -1,10 +1,7 @@
 use crate::{
     error,
     objects::{
-        blob::Blob,
-        commit::Commit,
-        object_type::{FluxObject, ObjectType},
-        tree::Tree,
+        blob::Blob, commit::Commit, object::Object, object_type::ObjectType, tree::Tree
     },
     utils,
 };
@@ -36,12 +33,12 @@ impl ObjectStore {
         Ok(Self { path })
     }
 
-    pub fn store(&self, object: &dyn FluxObject) -> Result<()> {
+    pub fn store(&self, object: &dyn Object) -> Result<()> {
         self.store_object(&object.id(), &object.serialize())?;
         Ok(())
     }
 
-    pub fn retrieve_object(&self, hash: &str) -> Result<Box<dyn FluxObject>> {
+    pub fn retrieve_object(&self, hash: &str) -> Result<Box<dyn Object>> {
         let object = self.read_object(hash)?;
         match object.object_type {
             ObjectType::Blob => Ok(Box::new(Blob::from_bytes(object.decompressed_content))),

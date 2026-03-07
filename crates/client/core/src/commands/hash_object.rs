@@ -1,8 +1,5 @@
 use crate::{
-    commands::command::Command,
-    internals::repository::Repository,
-    objects::{blob::Blob, object_type::FluxObject, tree::Tree},
-    utils::read_bytes_from_file,
+    commands::command::Command, internals::repository::Repository, objects::{blob::Blob, object::Object, tree::Tree}, utils::read_bytes_from_file
 };
 use anyhow::Context;
 use std::{env, fs, path::PathBuf};
@@ -28,7 +25,7 @@ impl<'a> HashObject<'a> {
         let metadata = fs::metadata(&full_path)
             .with_context(|| format!("path does not exist: {}", full_path.display()))?;
 
-        let object: Box<dyn FluxObject> = if metadata.is_file() {
+        let object: Box<dyn Object> = if metadata.is_file() {
             let data = read_bytes_from_file(&full_path)?;
             Box::new(Blob::from_bytes(data))
         } else {

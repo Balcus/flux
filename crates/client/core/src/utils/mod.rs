@@ -15,6 +15,7 @@ pub struct GenericObject {
     pub decompressed_content: Vec<u8>,
 }
 
+// TODO: switch to using the worktree read file!
 pub fn read_bytes_from_file<P: AsRef<Path>>(path: P) -> std::io::Result<Vec<u8>> {
     let mut file = File::open(path)?;
     let mut data = Vec::new();

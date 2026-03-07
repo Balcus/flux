@@ -1,7 +1,6 @@
 use super::object_type::ObjectType;
 use crate::{
-    objects::{blob::Blob, object_type::FluxObject},
-    utils::{self, read_bytes_from_file},
+    objects::{blob::Blob, object::Object}, utils::{self, read_bytes_from_file}
 };
 use std::{any::Any, collections::HashMap, fmt, fs, path::Path};
 
@@ -187,7 +186,7 @@ impl Tree {
     }
 }
 
-impl FluxObject for Tree {
+impl Object for Tree {
     fn object_type(&self) -> ObjectType {
         ObjectType::Tree
     }

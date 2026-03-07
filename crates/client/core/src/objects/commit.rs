@@ -1,5 +1,5 @@
 use super::object_type::ObjectType;
-use crate::objects::object_type::FluxObject;
+use crate::objects::object::Object;
 use crate::utils;
 use chrono::Local;
 use std::any::Any;
@@ -78,7 +78,7 @@ impl Commit {
     }
 }
 
-impl FluxObject for Commit {
+impl Object for Commit {
     fn object_type(&self) -> ObjectType {
         ObjectType::Commit
     }

@@ -1,5 +1,6 @@
+use crate::{objects::object::Object, utils};
+
 use super::object_type::ObjectType;
-use crate::{objects::object_type::FluxObject, utils};
 use std::{any::Any, fmt, str::from_utf8};
 
 pub struct Blob {
@@ -22,7 +23,7 @@ impl Blob {
     }
 }
 
-impl FluxObject for Blob {
+impl Object for Blob {
     fn object_type(&self) -> ObjectType {
         ObjectType::Blob
     }
@@ -63,8 +64,7 @@ impl fmt::Display for Blob {
 mod tests {
     use crate::{
         objects::{
-            blob::Blob,
-            object_type::{FluxObject, ObjectType},
+            blob::Blob, object::Object, object_type::ObjectType
         },
         utils,
     };

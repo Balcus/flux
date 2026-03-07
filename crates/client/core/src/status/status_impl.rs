@@ -1,7 +1,7 @@
 use crate::internals::repository::Repository;
 use crate::internals::work_tree::WorkTree;
 use crate::objects::blob::Blob;
-use crate::objects::object_type::FluxObject;
+use crate::objects::object::Object;
 use crate::utils::read_bytes_from_file;
 use anyhow::Result;
 use anyhow::anyhow;
