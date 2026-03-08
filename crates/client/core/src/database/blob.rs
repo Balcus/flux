@@ -1,4 +1,4 @@
-use crate::{objects::object::Object, utils};
+use crate::{database::object::Object, utils};
 
 use super::object_type::ObjectType;
 use std::{any::Any, fmt, str::from_utf8};
@@ -21,6 +21,14 @@ impl Blob {
     pub fn from_bytes(data: Vec<u8>) -> Self {
         Self { data }
     }
+
+    fn serialized(&self) -> Vec<u8> {
+        let header = format!("blob {}\0", self.data.len());
+        let mut full = Vec::new();
+        full.extend_from_slice(header.as_bytes());
+        full.extend_from_slice(&self.data);
+        full
+    }
 }
 
 impl Object for Blob {
@@ -29,19 +37,11 @@ impl Object for Blob {
     }
 
     fn id(&self) -> String {
-        let header = format!("blob {}\0", self.data.len());
-        let mut full = Vec::new();
-        full.extend_from_slice(header.as_bytes());
-        full.extend_from_slice(&self.data);
-        utils::hash(&full)
+        utils::hash(&self.serialized())
     }
 
     fn serialize(&self) -> Vec<u8> {
-        let header = format!("blob {}\0", self.data.len());
-        let mut full = Vec::new();
-        full.extend_from_slice(header.as_bytes());
-        full.extend_from_slice(&self.data);
-        utils::compress(&full)
+        self.serialized()
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -62,12 +62,7 @@ impl fmt::Display for Blob {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        objects::{
-            blob::Blob, object::Object, object_type::ObjectType
-        },
-        utils,
-    };
+    use crate::database::{blob::Blob, object::Object, object_type::ObjectType};
     use anyhow::Result;
 
     #[test]
@@ -84,9 +79,8 @@ mod tests {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(header.as_bytes());
         bytes.extend_from_slice(content.as_bytes());
-        let expected = utils::compress(&bytes);
 
-        assert_eq!(serialized, expected);
+        assert_eq!(serialized, bytes);
         assert_eq!(
             blob.id(),
             "3b18e512dba79e4c8300dd08aeb37f8e728b8dad".to_string()

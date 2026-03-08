@@ -1,5 +1,6 @@
 use crate::{
     commands::{command::Command, hash_object::HashObject},
+    database::database::Database,
     diff::diff_impl::Mayers,
     internals::repository::Repository,
     status::status_impl::{ChangeType, Status},
@@ -102,17 +103,17 @@ impl<'a> DiffCommand<'a> {
 
     fn from_index(&self, path: &str) -> Target {
         let entry = self.repo.index.get(path).unwrap();
-        let id = self.repo.object_store.short_id(&entry).to_string();
+        let db = Database::open(self.repo.flux_dir.clone());
+        let short_id = db.short_id(&entry).to_string();
         let mode = Some("100644".to_string());
-        let data = self.repo.object_store.read_blob(&entry).ok();
-        Target::new(path.to_string(), id, mode, data)
+        let blob = db.read_object(&entry).unwrap();
+        let data = String::from_utf8(blob.content()).ok();
+        Target::new(path.to_string(), short_id, mode, data)
     }
 
     fn from_workspace(&self, path: &str) -> Target {
-        let id = self
-            .repo
-            .object_store
-            .short_id(&HashObject::new(path, false).hash(None).unwrap());
+        let db = Database::open(self.repo.flux_dir.clone());
+        let id = db.short_id(&HashObject::new(path, false).hash(None).unwrap());
         let data = fs::read_to_string(path).ok();
         let mode = Some("100644".to_string());
         Target::new(path.to_string(), id, mode, data)
@@ -123,11 +124,13 @@ impl<'a> DiffCommand<'a> {
     }
 
     fn from_head(&self, path: &str) -> Target {
+        let db = Database::open(self.repo.flux_dir.clone());
         let id = self.status.head_tree.get(path).unwrap();
-        let short_id = self.repo.object_store.short_id(id);
-        let data = self.repo.object_store.read_blob(id).unwrap();
+        let short_id = db.short_id(id);
+        let blob = db.read_object(id).unwrap();
+        let data = String::from_utf8(blob.content()).ok();
         let mode = Some("100644".to_string());
-        Target::new(path.to_string(), short_id, mode, Some(data))
+        Target::new(path.to_string(), short_id, mode, data)
     }
 
     fn diff_head_index(&self) {

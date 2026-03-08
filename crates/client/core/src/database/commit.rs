@@ -1,10 +1,11 @@
 use super::object_type::ObjectType;
-use crate::objects::object::Object;
+use crate::database::object::Object;
 use crate::utils;
 use chrono::Local;
 use std::any::Any;
 use std::fmt;
 
+#[derive(Clone)]
 pub struct Commit {
     parent_hash: Option<String>,
     pub tree_hash: String,
@@ -25,17 +26,15 @@ impl Commit {
             None => String::new(),
         };
         let content = format!(
-            "tree {}\n{}author {} <{}> {} {}\ncommitter {} <{}> {} {}\n\n{}",
+            "tree {}\n{}author {} <{}> {}\ncommitter {} <{}> {}\n\n{}",
             tree_hash,
             parent_line,
             user_name,
             user_email,
-            now.timestamp(),
-            now.format("%z"),
+            now.format("%a %b %e %H:%M:%S %Y %z"),
             user_name,
             user_email,
-            now.timestamp(),
-            now.format("%z"),
+            now.format("%a %b %e %H:%M:%S %Y %z"),
             message
         )
         .as_bytes()
@@ -96,7 +95,7 @@ impl Object for Commit {
         let mut full = Vec::new();
         full.extend_from_slice(header.as_bytes());
         full.extend_from_slice(&self.content);
-        utils::compress(&full)
+        full
     }
 
     fn as_any(&self) -> &dyn Any {

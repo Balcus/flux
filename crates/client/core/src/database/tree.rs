@@ -1,25 +1,15 @@
 use super::object_type::ObjectType;
 use crate::{
-    objects::{blob::Blob, object::Object}, utils::{self, read_bytes_from_file}
+    database::{blob::Blob, object::Object, tree_entry::TreeEntry},
+    utils::{
+        self,
+        modes::{MODE_DIR, MODE_EXEC, MODE_FILE},
+    },
 };
+use std::os::unix::fs::MetadataExt;
 use std::{any::Any, collections::HashMap, fmt, fs, path::Path};
 
-pub struct TreeEntry {
-    pub mode: String,
-    pub hash: String,
-    pub name: String,
-}
-
-impl TreeEntry {
-    pub fn is_dir(&self) -> bool {
-        self.mode == "040000"
-    }
-
-    pub fn is_file(&self) -> bool {
-        self.mode != "040000"
-    }
-}
-
+#[derive(Clone)]
 pub struct Tree {
     content: Vec<u8>,
 }
@@ -27,7 +17,7 @@ pub struct Tree {
 impl Tree {
     pub fn new(dir: &Path) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let mut entries = Vec::new();
-        let dir_iter = fs::read_dir(dir).expect("Could not read directory contents");
+        let dir_iter = fs::read_dir(dir)?;
 
         for entry in dir_iter {
             let entry = entry?;
@@ -38,27 +28,30 @@ impl Tree {
                     continue;
                 }
 
-                let metadata = fs::metadata(&path).expect("Could not read file metadata");
+                let metadata = fs::metadata(&path)?;
                 let name = name.to_string();
 
+                let mode = if metadata.is_dir() {
+                    MODE_DIR
+                } else if metadata.mode() & 0o111 != 0 {
+                    MODE_EXEC
+                } else {
+                    MODE_FILE
+                };
+
                 if metadata.is_file() {
-                    let data = read_bytes_from_file(&path)?;
+                    let data = fs::read(&path)?;
                     let blob = Blob::from_bytes(data);
-
-                    let hash = blob.id();
-
                     entries.push(TreeEntry {
-                        mode: "100644".to_string(),
-                        hash,
+                        mode,
+                        id: blob.id(),
                         name,
                     });
                 } else if metadata.is_dir() {
                     let subtree = Tree::new(&path)?;
-                    let hash = subtree.id();
-
                     entries.push(TreeEntry {
-                        mode: "040000".to_string(),
-                        hash,
+                        mode,
+                        id: subtree.id(),
                         name,
                     });
                 }
@@ -69,89 +62,66 @@ impl Tree {
         Ok(Self { content })
     }
 
-    pub fn from_content(content: Vec<u8>) -> Self {
-        Self { content }
-    }
-
     pub fn from_index(index: &HashMap<String, String>) -> Self {
         let mut entries = Vec::new();
 
-        for (path, hash) in index {
-            let name = Path::new(path)
+        for (path_str, id) in index {
+            let path = Path::new(path_str);
+            let name = path
                 .file_name()
                 .and_then(|n| n.to_str())
-                .expect("Invalid filename in index")
+                .unwrap_or(path_str)
                 .to_string();
 
+            let mode = if let Ok(meta) = fs::metadata(path) {
+                if meta.is_dir() {
+                    MODE_DIR
+                } else if meta.mode() & 0o111 != 0 {
+                    MODE_EXEC
+                } else {
+                    MODE_FILE
+                }
+            } else {
+                MODE_FILE
+            };
+
             entries.push(TreeEntry {
-                mode: "100644".to_string(),
-                hash: hash.clone(),
+                mode,
+                id: id.clone(),
                 name,
             });
         }
         let content = Self::build_content(entries);
-
         Self { content }
     }
 
     fn build_content(mut entries: Vec<TreeEntry>) -> Vec<u8> {
         entries.sort_by(|a, b| {
-            let a_name = if a.mode == "040000" {
-                format!("{}/", a.name)
-            } else {
-                a.name.clone()
-            };
-
-            let b_name = if b.mode == "040000" {
-                format!("{}/", b.name)
-            } else {
-                b.name.clone()
-            };
-
-            a_name.cmp(&b_name)
+            let mut a_sort = a.name.clone();
+            let mut b_sort = b.name.clone();
+            if a.is_dir() {
+                a_sort.push('/');
+            }
+            if b.is_dir() {
+                b_sort.push('/');
+            }
+            a_sort.cmp(&b_sort)
         });
 
         let mut tree_content = Vec::new();
-
         for entry in entries {
-            let hash_bytes = hex::decode(&entry.hash).expect("Invalid object hash");
-            let entry_header = format!("{} {}\0", entry.mode, entry.name);
+            let hash_bytes = hex::decode(&entry.id).expect("Invalid object hash");
+            // Modes are already normalized in TreeEntry now
+            let entry_header = format!("{:o} {}\0", entry.mode, entry.name);
 
             tree_content.extend_from_slice(entry_header.as_bytes());
             tree_content.extend_from_slice(&hash_bytes);
         }
-
         tree_content
     }
 
-    fn to_string(&self) -> String {
-        let mut result = String::new();
-        let mut pos = 0;
-
-        while pos < self.content.len() {
-            if let Some(space_pos) = self.content[pos..].iter().position(|&b| b == b' ') {
-                let mode = String::from_utf8_lossy(&self.content[pos..pos + space_pos]);
-                pos += space_pos + 1;
-
-                if let Some(null_pos) = self.content[pos..].iter().position(|&b| b == 0) {
-                    let name = String::from_utf8_lossy(&self.content[pos..pos + null_pos]);
-                    pos += null_pos + 1;
-
-                    let hash_bytes = &self.content[pos..pos + 20];
-                    let hash: String = hash_bytes.iter().map(|b| format!("{:02x}", b)).collect();
-                    pos += 20;
-
-                    let entry_type = if mode.starts_with("040") {
-                        "tree"
-                    } else {
-                        "blob"
-                    };
-                    result.push_str(&format!("{} {} {} {}\n", mode, entry_type, hash, name));
-                }
-            }
-        }
-
-        result
+    pub fn from_content(content: Vec<u8>) -> Self {
+        Self { content }
     }
 
     pub fn entries(&self) -> Vec<TreeEntry> {
@@ -162,7 +132,8 @@ impl Tree {
             let Some(space_pos) = self.content[pos..].iter().position(|&b| b == b' ') else {
                 break;
             };
-            let mode = String::from_utf8_lossy(&self.content[pos..pos + space_pos]).to_string();
+            let mode_str = String::from_utf8_lossy(&self.content[pos..pos + space_pos]);
+            let mode = u32::from_str_radix(&mode_str, 8).unwrap_or(0);
             pos += space_pos + 1;
 
             let Some(null_pos) = self.content[pos..].iter().position(|&b| b == 0) else {
@@ -174,15 +145,25 @@ impl Tree {
             if pos + 20 > self.content.len() {
                 break;
             }
-
             let hash_bytes = &self.content[pos..pos + 20];
-            let hash: String = hash_bytes.iter().map(|b| format!("{:02x}", b)).collect();
+            let id = hex::encode(hash_bytes);
             pos += 20;
 
-            entries.push(TreeEntry { mode, hash, name });
+            entries.push(TreeEntry { mode, id, name });
         }
-
         entries
+    }
+
+    fn to_string_pretty(&self) -> String {
+        let mut result = String::new();
+        for entry in self.entries() {
+            let type_str = if entry.is_dir() { "tree" } else { "blob" };
+            result.push_str(&format!(
+                "{:06o} {} {} {}\n",
+                entry.mode, type_str, entry.id, entry.name
+            ));
+        }
+        result
     }
 }
 
@@ -192,33 +173,28 @@ impl Object for Tree {
     }
 
     fn id(&self) -> String {
-        let header = format!("tree {}\0", self.content.len());
-        let mut full = Vec::new();
-        full.extend_from_slice(header.as_bytes());
+        let mut full = format!("tree {}\0", self.content.len()).into_bytes();
         full.extend_from_slice(&self.content);
         utils::hash(&full)
     }
 
     fn serialize(&self) -> Vec<u8> {
-        let header = format!("tree {}\0", self.content.len());
-        let mut full = Vec::new();
-        full.extend_from_slice(header.as_bytes());
+        let mut full = format!("tree {}\0", self.content.len()).into_bytes();
         full.extend_from_slice(&self.content);
-        utils::compress(&full)
+        full
     }
 
     fn as_any(&self) -> &dyn Any {
         self
     }
-
     fn content(&self) -> Vec<u8> {
         self.content.clone()
     }
 }
 
 impl fmt::Display for Tree {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", &self.to_string())
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_string_pretty())
     }
 }
 
@@ -239,7 +215,7 @@ mod tests {
         let entries = tree.entries();
 
         assert_eq!(entries.len(), 2);
-        assert!(entries.iter().all(|e| e.is_file()));
+        assert!(entries.iter().all(|e| !e.is_dir()));
         assert!(entries.iter().any(|e| e.name == "a.txt"));
         assert!(entries.iter().any(|e| e.name == "b.txt"));
         assert_eq!(tree.object_type(), ObjectType::Tree);
@@ -276,9 +252,8 @@ mod tests {
         let file_entry = entries.iter().find(|e| e.name == "root.txt").unwrap();
         let dir_entry = entries.iter().find(|e| e.name == "subdir").unwrap();
 
-        assert!(file_entry.is_file());
+        assert!(!file_entry.is_dir());
         assert!(dir_entry.is_dir());
-        assert_eq!(dir_entry.mode, "040000");
 
         Ok(())
     }
@@ -325,7 +300,7 @@ mod tests {
 
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].name, "main.rs");
-        assert_eq!(entries[0].hash, blob.id());
-        assert_eq!(entries[0].mode, "100644");
+        assert_eq!(entries[0].id, blob.id());
+        assert!(!entries[0].is_dir());
     }
 }

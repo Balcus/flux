@@ -46,7 +46,7 @@ impl Index {
         let mut map = HashMap::new();
         if let JsonValue::Object(obj) = json_obj {
             for (key, value) in obj.iter() {
-                if let JsonValue::String(s) = value {
+                if let Some(s) = value.as_str() {
                     map.insert(key.to_string(), s.to_string());
                 }
             }

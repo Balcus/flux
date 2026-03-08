@@ -1,7 +1,7 @@
 use flux_core::{
     commands::{
-        command::Command, diff::DiffCommand, hash_object::HashObject, init::InitCommand,
-        status::StatusCommand,
+        command::Command, commit::CommitCommand, diff::DiffCommand, hash_object::HashObject,
+        init::InitCommand, status::StatusCommand,
     },
     internals::repository::Repository,
 };
@@ -52,11 +52,10 @@ pub fn remove(repo_path: Option<String>, path: String) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn commit(repo_path: Option<String>, message: String) -> anyhow::Result<String> {
+pub fn commit(repo_path: Option<String>, message: String) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
-    let hash = repository.commit(message)?;
-    println!("{hash}");
-    Ok(hash)
+    CommitCommand::new(&mut repository, message)?.run()?;
+    Ok(())
 }
 
 pub fn log(repo_path: Option<String>) -> anyhow::Result<()> {

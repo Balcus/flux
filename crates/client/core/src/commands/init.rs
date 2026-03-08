@@ -1,8 +1,6 @@
 use crate::{
     commands::command::Command,
-    internals::{
-        config::Config, index::Index, object_store::ObjectStore, refs::Refs, work_tree::WorkTree,
-    },
+    internals::{config::Config, index::Index, refs::Refs, work_tree::WorkTree},
 };
 use std::{fs, path::PathBuf};
 
@@ -26,7 +24,6 @@ impl Command for InitCommand {
             .unwrap_or_else(|| PathBuf::from("."));
 
         let work_tree_path = work_tree_path.canonicalize()?;
-
         let flux_dir = work_tree_path.join(".flux");
 
         if flux_dir.exists() && self.force {
@@ -40,8 +37,7 @@ impl Command for InitCommand {
         }
 
         fs::create_dir_all(&flux_dir)?;
-
-        ObjectStore::new(&flux_dir)?;
+        fs::create_dir_all(flux_dir.join("objects"))?;
         Refs::new(&flux_dir)?;
         Config::default(flux_dir.join("config"))?;
         Index::new(&flux_dir)?;

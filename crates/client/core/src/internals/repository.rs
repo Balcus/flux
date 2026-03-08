@@ -1,15 +1,14 @@
+use crate::database::blob::Blob;
+use crate::database::commit::Commit;
+use crate::database::database::Database;
+use crate::database::object::Object;
+use crate::database::object_type::ObjectType;
 use crate::error;
 use crate::internals::config::{Config, Field};
 use crate::internals::grpc_client::GrpcClient;
 use crate::internals::index::Index;
-use crate::internals::object_store::ObjectStore;
 use crate::internals::refs::Refs;
 use crate::internals::work_tree::WorkTree;
-use crate::objects::blob::Blob;
-use crate::objects::commit::Commit;
-use crate::objects::object::Object;
-use crate::objects::object_type::ObjectType;
-use crate::utils::read_bytes_from_file;
 use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
@@ -28,21 +27,8 @@ pub struct Repository {
     pub flux_dir: PathBuf,
     pub config: Config,
     pub index: Index,
-    pub object_store: ObjectStore,
 }
 
-//TODO:
-/*
-* Commands as classes for all supported commands
-* Error handling for commands as classes
-* Unit and integration tests for both client and server !!
-* Add all supported commands to desktop app
-* Object ids and functional shorthand for them
-* File mode and executables
-* Simplified cli interface
-* Review branching
-* Merging
-*/
 impl Repository {
     pub fn open(path: Option<String>) -> Result<Self> {
         let work_tree_path = path
@@ -73,13 +59,11 @@ impl Repository {
         let config_path = store_dir.join("config");
         let config = Config::from(&config_path)?;
         let index = Index::load(&store_dir)?;
-        let object_store = ObjectStore::load(&store_dir)?;
         let refs = Refs::load(&store_dir)?;
 
         Ok(Self {
             refs,
             work_tree: WorkTree::new(work_tree_path),
-            object_store,
             flux_dir: store_dir,
             config,
             index,
@@ -107,9 +91,9 @@ impl Repository {
     }
 
     pub async fn clone(url: String, path: Option<String>) -> Result<Self> {
-        let mut clinet = GrpcClient::connect_remote(url).await?;
-        let repo_name = clinet.repo_name()?;
-        let archive = clinet.clone_repository().await?;
+        let mut client = GrpcClient::connect_remote(url).await?;
+        let repo_name = client.repo_name()?;
+        let archive = client.clone_repository().await?;
         let path = path.clone().unwrap_or(".".to_string());
         let repo_path = PathBuf::from(path).join(repo_name);
         let flux_dir = repo_path.join(".flux");
@@ -130,8 +114,7 @@ impl Repository {
 
     pub fn restore_fs(&self) -> Result<()> {
         let last_commit = self.refs.head_commit()?;
-        self.work_tree
-            .restore_from_commit(&last_commit, &self.object_store)?;
+        self.work_tree.restore_from_commit(&last_commit)?;
         Ok(())
     }
 
@@ -168,13 +151,16 @@ impl Repository {
     }
 
     fn add_file(&mut self, path: &Path) -> Result<()> {
-        let data = read_bytes_from_file(path)?;
+        let data = self.work_tree.read_file(path).unwrap();
         let blob = Blob::from_bytes(data);
-        self.object_store.store(&blob)?;
+        let blob_id = blob.id();
+
+        let db = Database::open(self.flux_dir.clone());
+        db.store(Box::new(blob)).unwrap();
 
         let rel_path = path.strip_prefix(self.work_tree.path()).map_err(|e| {
             error::RepositoryError::from(
-                "Failed to strip prefix from file. file might be outisde of the working directory",
+                "Failed to strip prefix from file. file might be outside of the working directory",
                 e,
             )
         })?;
@@ -185,8 +171,7 @@ impl Repository {
                 path: rel_path.to_owned(),
             })?;
 
-        self.index.add(rel_str.to_owned(), blob.id())?;
-
+        self.index.add(rel_str.to_owned(), blob_id)?;
         Ok(())
     }
 
@@ -243,34 +228,44 @@ impl Repository {
             return Err(error::RepositoryError::IndexEmpty);
         }
 
+        let db = Database::open(self.flux_dir.clone());
+
         let tree_hash = self
             .work_tree
-            .build_tree_from_index(&self.index.map, &self.object_store)?;
+            .build_tree_from_index(&self.index.map, &db)
+            .unwrap();
 
         let credentials = self
             .config
             .get_credentials()
             .map_err(error::RepositoryError::Credentials)?;
-        let user_name = credentials.user_name;
-        let user_email = credentials.user_email;
 
         let last = self.refs.head_commit()?;
         let parent = (!last.is_empty()).then_some(last);
-        let commit = Commit::new(tree_hash, user_name, user_email, parent, message);
-        self.object_store.store(&commit)?;
+
+        let commit = Commit::new(
+            tree_hash,
+            credentials.user_name,
+            credentials.user_email,
+            parent,
+            message,
+        );
+
         let hash = commit.id();
+        db.store(Box::new(commit)).unwrap();
         self.refs.update_head(&hash)?;
 
-        Ok(hash.to_string())
+        Ok(hash)
     }
 
     pub fn log(&self, _reference: Option<String>) -> Result<()> {
+        let db = Database::open(self.flux_dir.clone());
         let mut current_hash = self.refs.head_commit().ok().filter(|s| !s.is_empty());
 
         while let Some(hash) = current_hash {
-            let obj = self.object_store.retrieve_object(&hash)?;
+            let obj = db.read_object(&hash).unwrap();
             println!("{}", obj);
-            let current = self.object_store.retrieve_object(&hash)?;
+            let current = db.read_object(&hash).unwrap();
             if let Some(commit) = current.as_any().downcast_ref::<Commit>() {
                 current_hash = commit.parent_hash().map(String::from);
             } else {
@@ -318,8 +313,7 @@ impl Repository {
         let commit = self.refs.head_commit()?;
 
         if !commit.is_empty() {
-            self.work_tree
-                .restore_from_commit(&commit, &self.object_store)?
+            self.work_tree.restore_from_commit(&commit)?;
         }
 
         Ok(())
@@ -405,9 +399,9 @@ impl Repository {
     }
 
     pub fn cat(&self, hash: &str) -> Result<()> {
-        let obj = self.object_store.retrieve_object(hash)?;
+        let db = Database::open(self.flux_dir.clone());
+        let obj = db.read_object(hash).unwrap();
         println!("{}", obj);
-
         Ok(())
     }
 
@@ -422,17 +416,21 @@ impl Repository {
             .get_credentials()
             .map_err(error::RepositoryError::Credentials)?;
 
-        let user_name = credentials.user_name;
-        let user_email = credentials.user_email;
-
-        let tree = self.object_store.retrieve_object(&tree_hash)?;
+        let db = Database::open(self.flux_dir.clone());
+        let tree = db.read_object(&tree_hash).unwrap();
 
         if tree.object_type() != ObjectType::Tree {
             return Err(error::RepositoryError::CommitRoot { hash: tree.id() });
         }
 
-        let commit = Commit::new(tree.id(), user_name, user_email, parent_hash, message);
-        self.object_store.store(&commit)?;
+        let commit = Commit::new(
+            tree.id(),
+            credentials.user_name,
+            credentials.user_email,
+            parent_hash,
+            message,
+        );
+        db.store(Box::new(commit.clone())).unwrap();
         Ok(commit.id())
     }
 
@@ -441,18 +439,23 @@ impl Repository {
             return false;
         };
 
-        let commit_obj = self
-            .object_store
-            .retrieve_object(&head_commit_hash)
-            .unwrap();
-        let commit = commit_obj.as_any().downcast_ref::<Commit>().unwrap();
-        let head_tree_hash = &commit.tree_hash;
+        let db = Database::open(self.flux_dir.clone());
 
-        let current_tree_hash = self
-            .work_tree
-            .build_tree_from_index(&self.index.map, &self.object_store)
-            .unwrap();
+        let Ok(commit_obj) = db.read_object(&head_commit_hash) else {
+            return false;
+        };
 
-        head_tree_hash != &current_tree_hash
+        let Some(commit) = commit_obj.as_any().downcast_ref::<Commit>() else {
+            return false;
+        };
+
+        let head_tree_hash = commit.tree_hash.clone();
+
+        let Ok(current_tree_hash) = self.work_tree.build_tree_from_index(&self.index.map, &db)
+        else {
+            return false;
+        };
+
+        head_tree_hash != current_tree_hash
     }
 }

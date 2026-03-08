@@ -1,9 +1,10 @@
+use crate::database::blob::Blob;
+use crate::database::commit::Commit;
+use crate::database::database::Database;
+use crate::database::object::Object;
+use crate::database::tree::Tree;
+use crate::database::tree_entry::TreeEntry;
 use crate::error;
-use crate::internals::object_store::ObjectStore;
-use crate::objects::blob::Blob;
-use crate::objects::commit::Commit;
-use crate::objects::object::Object;
-use crate::objects::tree::{Tree, TreeEntry};
 use anyhow::Context;
 use std::collections::HashMap;
 use std::fs::{self, Metadata};
@@ -11,13 +12,13 @@ use std::io;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-const IGNORE: [&'static str; 3] = [".", "..", ".flux"];
+const IGNORE: [&str; 3] = [".", "..", ".flux"];
 
 #[derive(Debug)]
 pub struct WorkTree {
     path: PathBuf,
 }
-// TODO: operations like switch branch currently fail if there is binary data inside the work tree when doing a commit
+
 #[derive(Debug)]
 enum TreeNode {
     File(String),
@@ -115,10 +116,8 @@ impl WorkTree {
     ) -> anyhow::Result<()> {
         let full_path = self.path.join(path);
 
-        if mkdir {
-            if let Some(parent) = full_path.parent() {
-                fs::create_dir_all(parent)?;
-            }
+        if mkdir && let Some(parent) = full_path.parent() {
+            fs::create_dir_all(parent)?;
         }
 
         fs::write(&full_path, data)?;
@@ -154,7 +153,7 @@ impl WorkTree {
         Ok(())
     }
 
-    pub fn remove_dir(&self, path: &Path) -> () {
+    pub fn remove_dir(&self, path: &Path) {
         let full_path = self.path.join(path);
         if !full_path.is_dir() {
             return;
@@ -214,19 +213,15 @@ impl WorkTree {
         Ok(())
     }
 
-    pub fn restore_from_commit(
-        &self,
-        commit_hash: &str,
-        object_store: &ObjectStore,
-    ) -> Result<(), error::WorkTreeError> {
-        let commit_obj = object_store.retrieve_object(commit_hash)?;
+    pub fn restore_from_commit(&self, commit_hash: &str) -> Result<(), error::WorkTreeError> {
+        let db = Database::open(self.path.join(".flux"));
+        let commit_obj = db.read_object(commit_hash).unwrap();
         let commit = commit_obj
             .as_any()
             .downcast_ref::<Commit>()
             .ok_or(error::WorkTreeError::Downcast { expected: "commit" })?;
         let tree_hash = &commit.tree_hash;
-        self.restore_tree(tree_hash, &self.path, object_store)?;
-
+        self.restore_tree(tree_hash, &self.path, &db)?;
         Ok(())
     }
 
@@ -234,9 +229,9 @@ impl WorkTree {
         &self,
         tree_hash: &str,
         target_dir: &Path,
-        object_store: &ObjectStore,
+        db: &Database,
     ) -> Result<(), error::WorkTreeError> {
-        let tree_obj = object_store.retrieve_object(tree_hash)?;
+        let tree_obj = db.read_object(tree_hash).unwrap();
 
         let tree = tree_obj
             .as_any()
@@ -248,20 +243,18 @@ impl WorkTree {
         for entry in entries {
             let target_path = target_dir.join(&entry.name);
 
-            if entry.mode.starts_with("040") {
+            if entry.is_dir() {
                 fs::create_dir_all(&target_path).map_err(|e| error::IoError::Create {
                     path: target_path.clone(),
                     source: e,
                 })?;
-                self.restore_tree(&entry.hash, &target_path, object_store)?;
+                self.restore_tree(&entry.id, &target_path, db)?;
             } else {
-                let blob_obj = object_store.retrieve_object(&entry.hash)?;
-
+                let blob_obj = db.read_object(&entry.id).unwrap();
                 let blob = blob_obj
                     .as_any()
                     .downcast_ref::<Blob>()
                     .ok_or(error::WorkTreeError::Downcast { expected: "blob" })?;
-
                 let blob_content = blob.as_string();
                 fs::write(&target_path, blob_content.as_bytes()).map_err(|e| {
                     error::IoError::Write {
@@ -278,10 +271,10 @@ impl WorkTree {
     pub fn build_tree_from_index(
         &self,
         index: &HashMap<String, String>,
-        object_store: &ObjectStore,
-    ) -> Result<String, error::WorkTreeError> {
+        db: &Database,
+    ) -> anyhow::Result<String> {
         let root = self.build_tree_structure(index);
-        let hash = self.create_tree_object(&root, object_store)?;
+        let hash = self.create_tree_object(&root, db)?;
         Ok(hash)
     }
 
@@ -308,29 +301,25 @@ impl WorkTree {
         root
     }
 
-    fn create_tree_object(
-        &self,
-        node: &TreeNode,
-        object_store: &ObjectStore,
-    ) -> Result<String, error::WorkTreeError> {
+    fn create_tree_object(&self, node: &TreeNode, db: &Database) -> anyhow::Result<String> {
         match node {
-            TreeNode::File(hash) => Ok(hash.clone()),
+            TreeNode::File(id) => Ok(id.clone()),
             TreeNode::Dir(map) => {
                 let mut entries = Vec::new();
                 for (name, child) in map {
                     match child {
-                        TreeNode::File(hash) => {
+                        TreeNode::File(id) => {
                             entries.push(TreeEntry {
-                                mode: "100644".to_string(),
-                                hash: hash.clone(),
+                                mode: 0o100644,
+                                id: id.clone(),
                                 name: name.clone(),
                             });
                         }
                         TreeNode::Dir(_) => {
-                            let subtree_hash = self.create_tree_object(child, object_store)?;
+                            let subtree_id = self.create_tree_object(child, db)?;
                             entries.push(TreeEntry {
-                                mode: "040000".to_string(),
-                                hash: subtree_hash,
+                                mode: 0o040000,
+                                id: subtree_id,
                                 name: name.clone(),
                             });
                         }
@@ -338,12 +327,12 @@ impl WorkTree {
                 }
 
                 entries.sort_by(|a, b| {
-                    let a_name = if a.mode == "040000" {
+                    let a_name = if a.mode == 0o040000 {
                         format!("{}/", a.name)
                     } else {
                         a.name.clone()
                     };
-                    let b_name = if b.mode == "040000" {
+                    let b_name = if b.mode == 0o040000 {
                         format!("{}/", b.name)
                     } else {
                         b.name.clone()
@@ -353,20 +342,15 @@ impl WorkTree {
 
                 let mut tree_content = Vec::new();
                 for entry in entries {
-                    let hash_bytes = hex::decode(&entry.hash).map_err(|e| {
-                        error::WorkTreeError::InvalidHash {
-                            hash: entry.hash,
-                            source: e,
-                        }
-                    })?;
-                    let entry_header = format!("{} {}\0", entry.mode, entry.name);
+                    let hash_bytes = hex::decode(&entry.id)
+                        .map_err(|e| anyhow::anyhow!("Invalid hash {}: {}", entry.id, e))?;
+                    let entry_header = format!("{:o} {}\0", entry.mode, entry.name);
                     tree_content.extend_from_slice(entry_header.as_bytes());
                     tree_content.extend_from_slice(&hash_bytes);
                 }
 
                 let tree = Tree::from_content(tree_content);
-                object_store.store(&tree)?;
-
+                db.store(Box::new(tree.clone()))?;
                 Ok(tree.id())
             }
         }
@@ -438,10 +422,8 @@ mod tests {
 
         assert!(stats.contains_key(&csv_path));
         assert!(stats.contains_key(&notes_path));
-
         assert_eq!(stats.get(&csv_path).unwrap().len(), 20);
         assert_eq!(stats.get(&notes_path).unwrap().len(), 30);
-
         assert!(!stats.contains_key(&PathBuf::from("README.md")));
 
         Ok(())
@@ -618,7 +600,7 @@ mod tests {
         let work_tree = WorkTree::new(tmp.path().to_path_buf());
         let result = work_tree.stat_file(secret);
 
-        assert!(result.is_err(),);
+        assert!(result.is_err());
         assert!(
             result
                 .unwrap_err()

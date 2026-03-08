@@ -1,5 +1,7 @@
 use crate::{
-    commands::command::Command, internals::repository::Repository, objects::{blob::Blob, object::Object, tree::Tree}, utils::read_bytes_from_file
+    commands::command::Command,
+    database::{blob::Blob, database::Database, object::Object, tree::Tree},
+    internals::{repository::Repository, work_tree::WorkTree},
 };
 use anyhow::Context;
 use std::{env, fs, path::PathBuf};
@@ -7,11 +9,16 @@ use std::{env, fs, path::PathBuf};
 pub struct HashObject<'a> {
     pub path: &'a str,
     pub write: bool,
+    pub worktree: WorkTree,
 }
 
 impl<'a> HashObject<'a> {
     pub fn new(path: &'a str, write: bool) -> Self {
-        Self { path, write }
+        Self {
+            worktree: WorkTree::new(PathBuf::from(path)),
+            path,
+            write,
+        }
     }
 
     pub fn hash(&mut self, repo_path: Option<String>) -> anyhow::Result<String> {
@@ -26,18 +33,20 @@ impl<'a> HashObject<'a> {
             .with_context(|| format!("path does not exist: {}", full_path.display()))?;
 
         let object: Box<dyn Object> = if metadata.is_file() {
-            let data = read_bytes_from_file(&full_path)?;
+            let data = self.worktree.read_file(&full_path)?;
             Box::new(Blob::from_bytes(data))
         } else {
             Box::new(Tree::new(&full_path).unwrap())
         };
+        let id = object.id();
 
         if self.write {
             let repo = Repository::open(repo_path)?;
-            repo.object_store.store(object.as_ref())?;
+            let db = Database::open(repo.flux_dir);
+            db.store(object)?;
         }
 
-        Ok(object.id())
+        Ok(id)
     }
 }
 

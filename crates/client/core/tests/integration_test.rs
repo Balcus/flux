@@ -1,6 +1,7 @@
 use flux_core::commands::command::Command;
 use flux_core::commands::hash_object::HashObject;
 use flux_core::commands::init::InitCommand;
+use flux_core::database::database::Database;
 use flux_core::error;
 use flux_core::internals::repository::Repository;
 use serial_test::serial;
@@ -146,13 +147,9 @@ fn commit() {
     let main_ref = fs::read_to_string(".flux/refs/heads/main").unwrap();
     assert_eq!(main_ref.trim(), commit_hash);
 
-    let commit_content = String::from_utf8(
-        repo.object_store
-            .retrieve_object(&commit_hash)
-            .unwrap()
-            .content(),
-    )
-    .expect("Failed to read commit content");
+    let db = Database::open(repo.flux_dir.clone());
+    let commit_content = String::from_utf8(db.read_object(&commit_hash).unwrap().content())
+        .expect("Failed to read commit content");
 
     assert!(commit_content.starts_with("tree "));
     assert!(commit_content.contains("author Test User <test@example.com>"));
@@ -180,13 +177,9 @@ fn commit() {
     let main_ref = fs::read_to_string(".flux/refs/heads/main").expect("Failed to read HEAD");
     assert_eq!(main_ref.trim(), second_commit_hash);
 
-    let second_commit_content = String::from_utf8(
-        repo.object_store
-            .retrieve_object(&second_commit_hash)
-            .unwrap()
-            .content(),
-    )
-    .expect("Failed to read second commit content to string");
+    let second_commit_content =
+        String::from_utf8(db.read_object(&second_commit_hash).unwrap().content())
+            .expect("Failed to read second commit content to string");
 
     assert!(second_commit_content.contains(&format!("parent {}", commit_hash)));
     assert!(second_commit_content.contains("Second commit"));

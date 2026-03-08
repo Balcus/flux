@@ -1,8 +1,8 @@
+use crate::database::blob::Blob;
+use crate::database::database::Database;
+use crate::database::object::Object;
 use crate::internals::repository::Repository;
 use crate::internals::work_tree::WorkTree;
-use crate::objects::blob::Blob;
-use crate::objects::object::Object;
-use crate::utils::read_bytes_from_file;
 use anyhow::Result;
 use anyhow::anyhow;
 use std::collections::HashMap;
@@ -40,8 +40,9 @@ impl Status {
     }
 
     fn get_head_snapshot(repo: &Repository) -> Result<HashMap<String, String>> {
+        let db = Database::open(repo.flux_dir.clone());
         match repo.refs.head_commit() {
-            Ok(hash) if !hash.is_empty() => Ok(repo.object_store.commit_to_map(hash)?),
+            Ok(hash) if !hash.is_empty() => Ok(db.commit_to_map(hash)?),
             _ => Ok(HashMap::new()),
         }
     }
@@ -85,7 +86,7 @@ impl Status {
             if !full_path.exists() {
                 changes.insert(rel_path.clone(), ChangeType::Deleted);
             } else if full_path.is_file() {
-                let data = read_bytes_from_file(&full_path)?;
+                let data = work_tree.read_file(&full_path)?;
                 let current_blob = Blob::from_bytes(data);
                 if &current_blob.id() != index_hash {
                     changes.insert(rel_path.clone(), ChangeType::Modified);

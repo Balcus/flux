@@ -1,5 +1,5 @@
+use crate::database::object_type::ObjectType;
 use std::{any::Any, fmt};
-use crate::objects::object_type::ObjectType;
 
 pub trait Object: fmt::Display {
     fn object_type(&self) -> ObjectType;
