@@ -4,3 +4,4 @@ pub mod diff;
 pub mod hash_object;
 pub mod init;
 pub mod status;
+pub mod add;

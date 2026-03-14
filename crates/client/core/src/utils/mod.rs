@@ -2,6 +2,7 @@ use sha1::{Digest, Sha1};
 use std::path::{Component, Path, PathBuf};
 
 pub mod colors;
+pub mod lockfile;
 pub mod modes;
 
 /// Computes the SHA-1 hash of the given data and returns it.

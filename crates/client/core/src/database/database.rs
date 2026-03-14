@@ -13,6 +13,7 @@ pub struct Database {
 }
 
 impl Database {
+    /// expects the path to the flux directory as input
     pub fn open(path: PathBuf) -> Self {
         Self {
             disk_utils: DiskUtils::new(path.clone().join(OBJECTS_PATH)),
