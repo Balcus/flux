@@ -227,4 +227,8 @@ impl Refs {
     pub fn exists(&self, name: &str) -> bool {
         self.refs_path.join("heads").join(name).is_file()
     }
+
+    pub fn get_branch_head(&self, branch: &str) -> Result<Option<String>> {
+        Ok(self.branches.get(branch).cloned())
+    }
 }

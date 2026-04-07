@@ -9,6 +9,8 @@ use std::fmt;
 pub struct Commit {
     parent_hash: Option<String>,
     pub tree_hash: String,
+    pub message: String,
+    pub author: String,
     pub content: Vec<u8>,
 }
 
@@ -44,6 +46,8 @@ impl Commit {
             content,
             parent_hash,
             tree_hash,
+            message,
+            author: user_name,
         }
     }
 
@@ -52,12 +56,25 @@ impl Commit {
 
         let mut tree_hash = String::new();
         let mut parent_hash = None;
+        let mut author = String::new();
+        let mut message = String::new();
+        let mut in_message = false;
 
         for line in content_str.lines() {
-            if line.starts_with("tree ") {
+            if in_message {
+                if !message.is_empty() {
+                    message.push('\n');
+                }
+                message.push_str(line);
+            } else if line.is_empty() {
+                in_message = true;
+            } else if line.starts_with("tree ") {
                 tree_hash = line.strip_prefix("tree ").unwrap_or("").to_string();
             } else if line.starts_with("parent ") {
                 parent_hash = Some(line.strip_prefix("parent ").unwrap_or("").to_string());
+            } else if line.starts_with("author ") {
+                let raw = line.strip_prefix("author ").unwrap_or("");
+                author = raw.split('<').next().unwrap_or(raw).trim().to_string();
             }
         }
 
@@ -65,6 +82,8 @@ impl Commit {
             content,
             parent_hash,
             tree_hash,
+            message,
+            author,
         }
     }
 

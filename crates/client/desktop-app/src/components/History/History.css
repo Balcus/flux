@@ -1,0 +1,22 @@
+.history-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+}
+
+.history-list {
+  flex: 1;
+  overflow: auto;
+  background-color: var(--bg-color);
+}
+
+.history-graph {
+  padding: 20px;
+  min-width: fit-content;
+}
+
+.history-graph svg {
+  transform: scale(0.85);
+  transform-origin: top left;
+}

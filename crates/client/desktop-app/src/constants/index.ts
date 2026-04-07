@@ -1,7 +1,9 @@
 import {
   BranchIcon,
+  CommitIcon,
   FolderIcon,
   HistoryIcon,
+  PushIcon,
   SettingsIcon,
 } from "../assets/icons";
 
@@ -31,3 +33,22 @@ export const MENU_ITEMS: MenuItem[] = [
     icon: BranchIcon,
   },
 ];
+
+export interface ActionBarItem {
+  id: string;
+  icon: string;
+  name: string;
+}
+
+export const ACTION_BAR_ITEMS: ActionBarItem[] = [
+  {
+    id: "commit",
+    icon: CommitIcon,
+    name: "Commit"
+  },
+  {
+    id: "push",
+    icon: PushIcon,
+    name: "Push"
+  }
+]

@@ -1,6 +1,7 @@
-use flux_core::error::ConfigError;
-use flux_core::internals::repository::Repository;
+use flux_core::{error::ConfigError, internals::repository::Repository};
 use serde::Serialize;
+
+use crate::models::branch_info::BranchInfo;
 
 #[derive(Serialize)]
 pub struct RepositoryInfo {
@@ -55,10 +56,4 @@ impl RepositoryInfo {
             origin,
         })
     }
-}
-
-#[derive(Serialize)]
-pub struct BranchInfo {
-    pub name: String,
-    pub is_current: bool,
 }

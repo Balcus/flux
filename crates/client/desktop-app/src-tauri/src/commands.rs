@@ -1,8 +1,9 @@
-use crate::{
-    models::{BranchInfo, RepositoryInfo},
-    AppState,
+use crate::models::{
+    app_state::AppState, branch_info::BranchInfo, commit_info::CommitInfo,
+    repository_info::RepositoryInfo,
 };
 use flux_core::{
+    database::{commit::Commit, database::Database},
     error::{ConfigError, RefsError},
     internals::repository::Repository,
 };
@@ -73,7 +74,7 @@ pub fn get_branches(state: State<AppState>) -> Result<Vec<BranchInfo>, String> {
     let repo_lock = state.repository.lock().unwrap();
     let repo = repo_lock
         .as_ref()
-        .ok_or_else(|| "No repository open".to_string())?;
+        .ok_or_else(|| "No repository opened".to_string())?;
 
     let current = repo
         .refs
@@ -91,4 +92,79 @@ pub fn get_branches(state: State<AppState>) -> Result<Vec<BranchInfo>, String> {
 
     branches.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(branches)
+}
+
+#[tauri::command]
+pub fn get_commits(state: State<AppState>) -> Result<Vec<CommitInfo>, String> {
+    let repo_lock = state.repository.lock().unwrap();
+    let repo = repo_lock
+        .as_ref()
+        .ok_or_else(|| "No repository open".to_string())?;
+    let db = Database::open(repo.flux_dir.clone());
+
+    let mut commits_map: std::collections::HashMap<String, CommitInfo> =
+        std::collections::HashMap::new();
+    let mut branch_entries: Vec<(&String, &String)> = repo.refs.branches.iter().collect();
+
+    branch_entries.sort_by_key(|(name, _)| {
+        if *name == "main" {
+            0
+        } else {
+            1
+        }
+    });
+
+    for (branch_name, tip_hash) in branch_entries {
+        let mut current_hash = Some(tip_hash.clone());
+        while let Some(hash) = current_hash {
+            let obj = match db.read_object(&hash) {
+                Ok(o) => o,
+                Err(_) => break,
+            };
+            if let Some(commit) = obj.as_any().downcast_ref::<Commit>() {
+                let parent = commit.parent_hash().map(String::from);
+                commits_map
+                    .entry(hash.clone())
+                    .or_insert_with(|| CommitInfo {
+                        id: hash.clone(),
+                        message: commit.message.clone(),
+                        author: commit.author.clone(),
+                        parent: parent.clone(),
+                        branch: branch_name.clone(),
+                    });
+                current_hash = parent;
+            } else {
+                break;
+            }
+        }
+    }
+
+    let mut sorted_list = Vec::new();
+    let mut visited = std::collections::HashSet::new();
+
+    fn visit(
+        id: &str,
+        map: &std::collections::HashMap<String, CommitInfo>,
+        visited: &mut std::collections::HashSet<String>,
+        list: &mut Vec<CommitInfo>,
+    ) {
+        if visited.contains(id) || !map.contains_key(id) {
+            return;
+        }
+        visited.insert(id.to_string());
+        let commit = &map[id];
+        if let Some(ref parent_id) = commit.parent {
+            visit(parent_id, map, visited, list);
+        }
+        list.push(commit.clone());
+    }
+
+    let mut keys: Vec<String> = commits_map.keys().cloned().collect();
+    keys.sort(); // Deterministic start point
+
+    for id in keys {
+        visit(&id, &commits_map, &mut visited, &mut sorted_list);
+    }
+
+    Ok(sorted_list)
 }
