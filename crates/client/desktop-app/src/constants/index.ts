@@ -1,6 +1,7 @@
 import {
   BranchIcon,
   CommitIcon,
+  FileStatus,
   FolderIcon,
   HistoryIcon,
   PushIcon,
@@ -22,6 +23,7 @@ export const MENU_ITEMS: MenuItem[] = [
     label: "Workspace",
     children: [
       { id: "history", label: "History", icon: HistoryIcon, link: "/history" },
+      { id: "file status", label: "File Status", icon: FileStatus, link: "/file-status" },
       { id: "settings", label: "Settings", icon: SettingsIcon, link: "/settings" },
     ],
     icon: FolderIcon,

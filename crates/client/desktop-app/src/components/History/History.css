@@ -20,3 +20,13 @@
   transform: scale(0.85);
   transform-origin: top left;
 }
+
+.history-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+}

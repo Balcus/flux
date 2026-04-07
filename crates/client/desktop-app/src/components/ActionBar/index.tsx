@@ -1,6 +1,6 @@
-import { ACTION_BAR_ITEMS, ActionBarItem } from "../../../constants";
+import { ACTION_BAR_ITEMS, ActionBarItem } from "../../constants";
 
-import "../../../App.css";
+import "../../App.css";
 import "./ActionBar.css";
 
 export default function ActionBar() {
@@ -18,7 +18,7 @@ export default function ActionBar() {
   };
 
   return (
-    <nav className="action-bar">
+    <nav>
       <ul className="action-bar-items">
         {ACTION_BAR_ITEMS.map((item) => renderActionBarItem(item))}
       </ul>

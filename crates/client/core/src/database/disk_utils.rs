@@ -35,6 +35,13 @@ impl DiskUtils {
     }
 
     pub fn read_raw(&self, id: &str) -> std::io::Result<Vec<u8>> {
+        if id.len() < 2 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Invalid object id",
+            ));
+        }
+
         let path = self.objects_path.join(&id[0..2]).join(&id[2..]);
         let file = fs::File::open(path)?;
         let mut decoder = ZlibDecoder::new(file);

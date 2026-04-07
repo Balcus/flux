@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from "react";
-import ActionBar from "./ActionBar";
 import { Commit } from "../../models/Commit";
 import { invoke } from "@tauri-apps/api/core";
 import { Gitgraph, Orientation } from "@gitgraph/react";
@@ -11,8 +10,12 @@ export default function History() {
   const [commits, setCommits] = useState<Commit[]>([]);
   const built = useRef(false);
 
-  useEffect(() => {
+  const fetchCommits = () => {
     invoke<Commit[]>("get_commits").then(setCommits).catch(console.error);
+  };
+
+  useEffect(() => {
+    fetchCommits();
   }, []);
 
   const renderGraph = (gitgraph: any) => {
@@ -43,7 +46,6 @@ export default function History() {
 
   return (
     <div className="history-container">
-      <ActionBar />
       <div className="history-list">
         <div className="history-graph">
           {commits.length > 0 && (

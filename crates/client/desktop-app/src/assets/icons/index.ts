@@ -7,6 +7,7 @@ import OpenIcon from "./OpenIcon.svg";
 import BrowseIcon from "./BrowseIcon.svg";
 import PushIcon from './PushIcon.svg';
 import CommitIcon from './CommitIcon.svg';
+import FileStatus from './FileStatus.svg';
 
 export {
   FolderIcon,
@@ -17,5 +18,6 @@ export {
   PushIcon,
   CommitIcon,
   OpenIcon,
-  BrowseIcon
+  BrowseIcon,
+  FileStatus
 };

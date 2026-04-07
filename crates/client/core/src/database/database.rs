@@ -82,6 +82,9 @@ impl Database {
     }
 
     pub fn short_id(&self, id: &String) -> String {
+        if id.len() < 7 {
+            return id.clone();
+        }
         String::from(&id[0..7])
     }
 }
