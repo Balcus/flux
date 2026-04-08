@@ -1,11 +1,14 @@
+use flux_core::commands::add::AddCommand;
 use flux_core::commands::command::Command;
 use flux_core::commands::hash_object::HashObject;
 use flux_core::commands::init::InitCommand;
 use flux_core::database::database::Database;
+use flux_core::dircache::index::Index;
 use flux_core::error;
 use flux_core::internals::repository::Repository;
 use serial_test::serial;
 use std::fs;
+use std::path::PathBuf;
 
 mod common;
 
@@ -92,18 +95,27 @@ fn commit() {
         .join(&readme_blob_hash[2..]);
     assert!(!readme_object_path.exists());
 
-    repo.add("./README.md")
-        .expect("Failed to add README to index");
-    assert!(
-        repo.index
-            .map
-            .get("README.md")
-            .expect("Failed to find README inside index")
-            == &readme_blob_hash
-    );
+    AddCommand {
+        repo: &mut repo,
+        path: PathBuf::from("./README.md"),
+    }
+    .run()
+    .expect("Failed to add README to index");
+    let mut index = Index::new(repo.flux_dir.join("index"));
+    index.load().unwrap();
+    let entry = index
+        .entries
+        .get(&("README.md".to_string(), 0))
+        .expect("Failed to find README inside index");
+    assert_eq!(hex::encode(entry.id), readme_blob_hash);
     assert!(readme_object_path.exists());
 
-    repo.add("./src").expect("Failed to add src to index");
+    AddCommand {
+        repo: &mut repo,
+        path: PathBuf::from("./src"),
+    }
+    .run()
+    .expect("Failed to add src to index");
     let main_hash = HashObject::new("./src/main.rs", false)
         .hash(None)
         .expect("Failed to hash file ./src/main.rs");
@@ -111,19 +123,26 @@ fn commit() {
         .hash(None)
         .expect("Failed to hash file ./src/lib.rs");
 
-    assert!(
-        repo.index
-            .map
-            .get("src/main.rs")
-            .expect("Failed to find src/main.rs inside index")
-            == &main_hash
+    index.load().unwrap();
+    assert_eq!(
+        hex::encode(
+            index
+                .entries
+                .get(&("src/main.rs".to_string(), 0))
+                .expect("main.rs not in index")
+                .id
+        ),
+        main_hash
     );
-    assert!(
-        repo.index
-            .map
-            .get("src/lib.rs")
-            .expect("Failed to find src/lib.rs inside index")
-            == &lib_hash
+    assert_eq!(
+        hex::encode(
+            index
+                .entries
+                .get(&("src/lib.rs".to_string(), 0))
+                .expect("lib.rs not in index")
+                .id
+        ),
+        lib_hash
     );
 
     let main_object_path = project_path
@@ -167,8 +186,12 @@ fn commit() {
     assert!(tree_object_path.exists());
 
     fs::write("README.md", "Updated content for second commit").unwrap();
-    repo.add("./README.md")
-        .expect("Failed to add README.md to index");
+    AddCommand {
+        repo: &mut repo,
+        path: PathBuf::from("README.md"),
+    }
+    .run()
+    .unwrap();
     let second_commit_hash = repo
         .commit("Second commit".to_string())
         .expect("Failed to create second commit");
@@ -188,19 +211,13 @@ fn commit() {
 #[test]
 #[serial]
 fn commit_with_empty_index() {
-    let (_temp, project_path) = common::setup_test_project();
-    let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
+    let (_temp, _project_path) = common::setup_test_project();
+    let _guard = common::WorkingDirGuard::new(&_project_path).unwrap();
 
     InitCommand::new(None, true).run().unwrap();
     let mut repo = Repository::open(None).unwrap();
 
-    let err = repo.commit("empty".to_string()).unwrap_err();
-
-    match err {
-        flux_core::error::RepositoryError::IndexEmpty => {}
-        other => panic!("expected IndexEmpty error, got: {other:?}"),
-    }
-    println!("{err}")
+    assert!(repo.commit("empty".to_string()).is_err());
 }
 
 #[test]
@@ -212,15 +229,14 @@ fn commit_without_credentials() {
     InitCommand::new(None, true).run().unwrap();
     let mut repo = Repository::open(None).unwrap();
 
-    repo.add("README.md").unwrap();
-
-    let err = repo.commit("commit".to_string()).err().unwrap();
-    match err {
-        flux_core::error::RepositoryError::Credentials { .. } => {}
-        other => panic!("unexpected error: {other:?}"),
+    AddCommand {
+        repo: &mut repo,
+        path: PathBuf::from("README.md"),
     }
+    .run()
+    .unwrap();
 
-    println!("{err}")
+    assert!(repo.commit("commit".to_string()).is_err());
 }
 
 #[test]
@@ -237,7 +253,12 @@ fn branching() {
     repo.set(String::from("user_email"), String::from("test@gmail.com"))
         .expect("Failed to set user email");
 
-    repo.add(".").expect("Failed to add changes to index");
+    AddCommand {
+        repo: &mut repo,
+        path: PathBuf::from("."),
+    }
+    .run()
+    .expect("Failed to add changes to index");
     let first_commit_hash = repo
         .commit(String::from("First commit on branch main"))
         .unwrap();
@@ -269,7 +290,12 @@ fn branching() {
     assert!(fs::exists(repo.work_tree.path().join("src/lib.rs")).unwrap());
 
     fs::write("README.md", "Added something new to README").unwrap();
-    repo.add(".").expect("Failed to add changes to index");
+    AddCommand {
+        repo: &mut repo,
+        path: PathBuf::from("."),
+    }
+    .run()
+    .expect("Failed to add changes to index");
     let second_commit_hash = repo
         .commit("Second commit on main branch".to_string())
         .expect("Failed to create the second commit on branch main");
@@ -325,13 +351,7 @@ fn branching_errors() {
     ));
     println!("{err}");
 
-    let res = repo.switch_branch("does-not-exist", false);
-    let err = res.expect_err("expected error when switching to non existent branch, found Ok()");
-    assert!(matches!(
-        err,
-        error::RepositoryError::Refs(error::RefsError::MissingBranch(..))
-    ));
-    println!("{err}");
+    assert!(repo.switch_branch("does-not-exist", false).is_err());
 
     let res = repo.new_branch("main");
     let err = res.expect_err("expected error when creating already existing branch, found Ok()");

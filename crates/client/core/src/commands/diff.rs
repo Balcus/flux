@@ -2,6 +2,7 @@ use crate::{
     commands::{command::Command, hash_object::HashObject},
     database::database::Database,
     diff::diff_impl::Mayers,
+    dircache::index::Index,
     internals::repository::Repository,
     status::status_impl::{ChangeType, Status},
 };
@@ -102,12 +103,15 @@ impl<'a> DiffCommand<'a> {
     }
 
     fn from_index(&self, path: &str) -> Target {
-        let entry = self.repo.index.get(path).unwrap();
+        let mut index = Index::new(self.repo.flux_dir.join("index"));
+        index.load().unwrap();
+        let entry = index.entries.get(&(path.to_string(), 0)).unwrap();
+        let hash = hex::encode(entry.id);
         let db = Database::open(self.repo.flux_dir.clone());
-        let short_id = db.short_id(&entry).to_string();
-        let mode = Some("100644".to_string());
-        let blob = db.read_object(&entry).unwrap();
+        let short_id = db.short_id(&hash).to_string();
+        let blob = db.read_object(&hash).unwrap();
         let data = String::from_utf8(blob.content()).ok();
+        let mode = Some("100644".to_string());
         Target::new(path.to_string(), short_id, mode, data)
     }
 

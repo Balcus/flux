@@ -25,7 +25,7 @@ impl<R: Read> ChecksumReader<R> {
         self.inner.read_exact(&mut actual_checksum)?;
 
         let expected_checksum = self.hasher.clone().finalize();
-        if actual_checksum != expected_checksum.as_slice() {
+        if actual_checksum != expected_checksum[..] {
             anyhow::bail!("Checksum mismatch");
         }
         Ok(())

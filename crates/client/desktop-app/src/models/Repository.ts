@@ -1,4 +1,5 @@
 import { Branch } from "./Branch";
+import { StatusInfo } from "./StatusInfo";
 
 export interface Repository {
   path: string;
@@ -9,4 +10,5 @@ export interface Repository {
   user_name: string | null;
   user_email: string | null;
   origin: string | null;
+  status: StatusInfo;
 }

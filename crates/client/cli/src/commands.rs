@@ -1,9 +1,9 @@
+use std::path::PathBuf;
+
 use flux_core::{
     commands::{
-        command::Command, commit::CommitCommand, diff::DiffCommand, hash_object::HashObject,
-        init::InitCommand, status::StatusCommand,
-    },
-    internals::repository::Repository,
+        add::AddCommand, command::Command, commit::CommitCommand, diff::DiffCommand, hash_object::HashObject, init::InitCommand, status::StatusCommand
+    }, dircache::index::Index, internals::repository::Repository
 };
 
 pub fn init(path: Option<String>, force: bool) -> anyhow::Result<()> {
@@ -40,14 +40,21 @@ pub fn commit_tree(
 
 pub fn add(repo_path: Option<String>, path: String) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
-    repository.add(&path)?;
+    AddCommand {
+        repo: &mut repository,
+        path: PathBuf::from(&path),
+    }
+    .run()?;
     println!("Added {path} to index");
     Ok(())
 }
 
 pub fn remove(repo_path: Option<String>, path: String) -> anyhow::Result<()> {
-    let mut repository = Repository::open(repo_path)?;
-    repository.delete(&path)?;
+    let repository = Repository::open(repo_path)?;
+    let mut index = Index::new(repository.flux_dir.join("index"));
+    index.load()?;
+    index.rm(path.clone())?;
+    index.write_updates()?;
     println!("Deleted {path} from index");
     Ok(())
 }

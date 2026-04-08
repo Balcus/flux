@@ -1,18 +1,22 @@
-use flux_core::{error::ConfigError, internals::repository::Repository};
+use flux_core::{
+    error::ConfigError,
+    internals::repository::Repository,
+    status::status_impl::{ChangeType, Status},
+};
 use serde::Serialize;
 
-use crate::models::branch_info::BranchInfo;
+use crate::models::{branch_info::BranchInfo, status_info::{StagedFile, StatusInfo}};
 
 #[derive(Serialize)]
 pub struct RepositoryInfo {
     pub path: String,
     pub branches: Vec<BranchInfo>,
     pub head: String,
-    pub index: Vec<String>,
     pub uncommited: Vec<String>,
     pub user_name: Option<String>,
     pub user_email: Option<String>,
     pub origin: Option<String>,
+    pub status: StatusInfo
 }
 
 impl RepositoryInfo {
@@ -45,15 +49,33 @@ impl RepositoryInfo {
             .get("origin")
             .map_err(|e: ConfigError| e.to_string())?;
 
+        let status = Status::new(repo).map_err(|e| e.to_string())?;
+
+        let staged: Vec<StagedFile> = status
+            .index_changes
+            .iter()
+            .map(|(path, change)| StagedFile {
+                path: path.clone(),
+                change_type: match change {
+                    ChangeType::Added => "Added".to_string(),
+                    ChangeType::Modified => "Modified".to_string(),
+                    ChangeType::Deleted => "Deleted".to_string(),
+                },
+            })
+            .collect();
+
         Ok(Self {
             path: repo.work_tree.path().to_string_lossy().to_string(),
             head,
             branches,
-            index: repo.index.map.keys().cloned().collect(),
             uncommited: Vec::new(),
             user_name,
             user_email,
             origin,
+            status: StatusInfo {
+                untracked: status.untracked,
+                staged,
+            },
         })
     }
 }

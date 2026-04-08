@@ -1,6 +1,7 @@
 use crate::database::blob::Blob;
 use crate::database::database::Database;
 use crate::database::object::Object;
+use crate::dircache::index::Index;
 use crate::internals::repository::Repository;
 use crate::internals::work_tree::WorkTree;
 use anyhow::Result;
@@ -25,11 +26,20 @@ pub enum ChangeType {
 
 impl Status {
     pub fn new(repo: &Repository) -> Result<Self> {
-        let index = &repo.index.map;
+        let mut index = Index::new(repo.flux_dir.join("index"));
+        index.load()?;
+
+        let flat: HashMap<String, String> = index
+            .entries
+            .iter()
+            .filter(|((_, stage), _)| *stage == 0)
+            .map(|((path, _), entry)| (path.clone(), hex::encode(entry.id)))
+            .collect();
+
         let head_tree = Self::get_head_snapshot(repo)?;
-        let index_changes = Self::compare_head_to_index(&head_tree, index);
-        let workspace_changes = Self::compare_index_to_workspace(&repo.work_tree, index)?;
-        let untracked = Self::find_untracked_files(repo, index)?;
+        let index_changes = Self::compare_head_to_index(&head_tree, &flat);
+        let workspace_changes = Self::compare_index_to_workspace(&repo.work_tree, &flat)?;
+        let untracked = Self::find_untracked_files(repo, &flat)?;
 
         Ok(Self {
             head_tree,
@@ -168,10 +178,10 @@ impl Status {
 
 #[cfg(test)]
 mod tests {
-    use crate::commands::{command::Command, init::InitCommand};
+    use crate::commands::{add::AddCommand, command::Command, init::InitCommand};
 
     use super::*;
-    use std::fs;
+    use std::{fs, path::PathBuf};
     use tempfile::tempdir;
 
     #[test]
@@ -234,7 +244,11 @@ mod tests {
         let file_path = dir.path().join(file_name);
         fs::write(&file_path, "hello world")?;
 
-        repo.add(file_name)?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from(file_name),
+        }
+        .run()?;
 
         let status = Status::new(&repo)?;
         assert!(status.untracked.is_empty());
@@ -251,7 +265,11 @@ mod tests {
             Some(&ChangeType::Modified)
         );
 
-        repo.add(file_name)?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from(file_name),
+        }
+        .run()?;
         let status = Status::new(&repo)?;
         assert!(status.workspace_changes.is_empty());
 
@@ -269,13 +287,21 @@ mod tests {
         let file_path = dir.path().join(file_name);
         fs::write(&file_path, "hello world")?;
 
-        repo.add(file_name)?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from(file_name),
+        }
+        .run()?;
         repo.set("user_name".to_string(), "test_user".to_string())?;
         repo.set("user_email".to_string(), "test_user@email.com".to_string())?;
         repo.commit("inital commit".to_string())?;
 
         fs::remove_file(&file_path)?;
-        repo.add(".")?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("."),
+        }
+        .run()?;
         let status = Status::new(&repo)?;
 
         assert!(status.untracked.is_empty());
@@ -299,7 +325,11 @@ mod tests {
         let file_path = dir.path().join(file_name);
 
         fs::write(&file_path, "hello world")?;
-        repo.add(file_name)?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from(file_name),
+        }
+        .run()?;
 
         fs::remove_file(&file_path)?;
 
@@ -327,7 +357,11 @@ mod tests {
         let files = ["a.txt", "b.txt", "c.txt"];
         for file in &files {
             fs::write(dir.path().join(file), "original content")?;
-            repo.add(file)?;
+            AddCommand {
+                repo: &mut repo,
+                path: PathBuf::from(file),
+            }
+            .run()?;
         }
 
         fs::write(dir.path().join("a.txt"), "changed content")?;
@@ -359,13 +393,25 @@ mod tests {
         repo.set("user_email".to_string(), "test_user@email.com".to_string())?;
 
         fs::write(dir.path().join("existing.txt"), "existing")?;
-        repo.add("existing.txt")?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("existing.txt"),
+        }
+        .run()?;
         repo.commit("initial commit".to_string())?;
 
         fs::write(dir.path().join("new1.txt"), "new file 1")?;
         fs::write(dir.path().join("new2.txt"), "new file 2")?;
-        repo.add("new1.txt")?;
-        repo.add("new2.txt")?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("new1.txt"),
+        }
+        .run()?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("new2.txt"),
+        }
+        .run()?;
 
         let status = Status::new(&repo)?;
         assert_eq!(
@@ -394,11 +440,19 @@ mod tests {
         let file_name = "test.txt";
         let file_path = dir.path().join(file_name);
         fs::write(&file_path, "original content")?;
-        repo.add(file_name)?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from(file_name),
+        }
+        .run()?;
         repo.commit("initial commit".to_string())?;
 
         fs::write(&file_path, "modified content")?;
-        repo.add(file_name)?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from(file_name),
+        }
+        .run()?;
 
         let status = Status::new(&repo)?;
         assert_eq!(
@@ -422,7 +476,11 @@ mod tests {
         repo.set("user_email".to_string(), "test_user@email.com".to_string())?;
 
         fs::write(dir.path().join("test.txt"), "hello")?;
-        repo.add("test.txt")?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("test.txt"),
+        }
+        .run()?;
         repo.commit("initial commit".to_string())?;
 
         let status = Status::new(&repo)?;
@@ -447,11 +505,19 @@ mod tests {
         let file_name = "test.txt";
         let file_path = dir.path().join(file_name);
         fs::write(&file_path, "original")?;
-        repo.add(file_name)?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from(file_name),
+        }
+        .run()?;
         repo.commit("initial commit".to_string())?;
 
         fs::write(&file_path, "staged change")?;
-        repo.add(file_name)?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from(file_name),
+        }
+        .run()?;
 
         fs::write(&file_path, "unstaged change on top")?;
 
@@ -497,12 +563,20 @@ mod tests {
         let file_name = "test.txt";
         let file_path = dir.path().join(file_name);
         fs::write(&file_path, "original content")?;
-        repo.add(file_name)?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from(file_name),
+        }
+        .run()?;
         repo.commit("initial commit".to_string())?;
 
         fs::write(&file_path, "temporary change")?;
         fs::write(&file_path, "original content")?;
-        repo.add(file_name)?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from(file_name),
+        }
+        .run()?;
 
         let status = Status::new(&repo)?;
         assert_eq!(status.index_changes.get(file_name), None);
@@ -526,17 +600,37 @@ mod tests {
         let delete_path = dir.path().join("delete_me.txt");
         fs::write(&modify_path, "original")?;
         fs::write(&delete_path, "to be deleted")?;
-        repo.add("modify_me.txt")?;
-        repo.add("delete_me.txt")?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("modify_me.txt"),
+        }
+        .run()?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("delete_me.txt"),
+        }
+        .run()?;
         repo.commit("initial commit".to_string())?;
 
         fs::write(&modify_path, "changed")?;
-        repo.add("modify_me.txt")?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("modify_me.txt"),
+        }
+        .run()?;
         fs::remove_file(&delete_path)?;
-        repo.add(".")?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("."),
+        }
+        .run()?;
         fs::write(dir.path().join("new_untracked.txt"), "untracked")?;
         fs::write(dir.path().join("new_staged.txt"), "staged")?;
-        repo.add("new_staged.txt")?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("new_staged.txt"),
+        }
+        .run()?;
 
         let status = Status::new(&repo)?;
         assert_eq!(
@@ -572,7 +666,11 @@ mod tests {
         fs::write(dir.path().join("src/main.rs"), "fn main() {}")?;
         fs::write(dir.path().join("src/utils/helper.rs"), "fn help() {}")?;
         fs::write(dir.path().join("readme.md"), "# project")?;
-        repo.add(".")?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("."),
+        }
+        .run()?;
         repo.commit("initial commit".to_string())?;
 
         let status = Status::new(&repo)?;
@@ -582,10 +680,18 @@ mod tests {
             dir.path().join("src/utils/helper.rs"),
             "fn help() { todo!() }",
         )?;
-        repo.add("src/utils/helper.rs")?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("src/utils/helper.rs"),
+        }
+        .run()?;
 
         fs::remove_file(dir.path().join("src/main.rs"))?;
-        repo.add(".")?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("."),
+        }
+        .run()?;
 
         fs::write(dir.path().join("src/new.rs"), "fn new() {}")?;
         fs::create_dir_all(dir.path().join("src/utils/extra"))?;

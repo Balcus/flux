@@ -2,10 +2,13 @@ use std::path::PathBuf;
 
 use crate::models::{
     app_state::AppState, branch_info::BranchInfo, commit_info::CommitInfo,
-    repository_info::RepositoryInfo, status_info::{StagedFile, StatusInfo},
+    repository_info::RepositoryInfo,
 };
 use flux_core::{
-    commands::add::AddCommand, database::{commit::Commit, database::Database}, error::{ConfigError, RefsError}, internals::repository::Repository, status::status_impl::{ChangeType, Status}
+    commands::{add::AddCommand, command::Command},
+    database::{commit::Commit, database::Database},
+    error::{ConfigError, RefsError},
+    internals::repository::Repository,
 };
 use tauri::State;
 
@@ -164,42 +167,14 @@ pub fn get_commits(state: State<AppState>) -> Result<Vec<CommitInfo>, String> {
 }
 
 #[tauri::command]
-pub fn get_status(state: State<AppState>) -> Result<StatusInfo, String> {
-    let repo_lock = state.repository.lock().unwrap();
-    let repo = repo_lock
-        .as_ref()
-        .ok_or_else(|| "No repository open".to_string())?;
-
-    let status = Status::new(repo).map_err(|e| e.to_string())?;
-
-    let staged = status
-        .index_changes
-        .iter()
-        .map(|(path, change)| StagedFile {
-            path: path.clone(),
-            change_type: match change {
-                ChangeType::Added => "Added".to_string(),
-                ChangeType::Modified => "Modified".to_string(),
-                ChangeType::Deleted => "Deleted".to_string(),
-            },
-        })
-        .collect();
-
-    Ok(StatusInfo {
-        untracked: status.untracked,
-        staged,
-    })
-}
-
-#[tauri::command]
 pub fn add_file(path: String, state: State<AppState>) -> Result<(), String> {
-    let repo_lock = state.repository.lock().unwrap();
+    let mut repo_lock = state.repository.lock().unwrap();
     let repo = repo_lock
-        .as_ref()
+        .as_mut()
         .ok_or_else(|| "No repository open".to_string())?;
 
     let mut cmd = AddCommand {
-        root_path: repo.work_tree.path().to_string_lossy().to_string(),
+        repo,
         path: PathBuf::from(path),
     };
 

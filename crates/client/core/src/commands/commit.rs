@@ -1,7 +1,9 @@
 use crate::{
     commands::command::Command,
     database::{commit::Commit, database::Database, object::Object},
+    dircache::index::Index,
     internals::repository::Repository,
+    status::status_impl::Status,
 };
 use anyhow::Context;
 use chrono::{DateTime, Utc};
@@ -43,14 +45,18 @@ impl<'a> CommitCommand<'a> {
 
 impl<'a> Command for CommitCommand<'a> {
     fn run(&mut self) -> anyhow::Result<()> {
-        if self.repo.index.is_empty() {
+        let status = Status::new(self.repo)?;
+        let mut index = Index::new(self.repo.flux_dir.join("index"));
+        index.load()?;
+
+        if status.is_clean() {
             anyhow::bail!("Nothing to commit, index is empty.");
         }
 
         let tree_hash = self
             .repo
             .work_tree
-            .build_tree_from_index(&self.repo.index.map, &self.database)
+            .build_tree_from_index(&index, &self.database)
             .context("Failed to build tree from index")?;
 
         let parent_hash = self.repo.refs.head_commit().ok().filter(|s| !s.is_empty());
@@ -76,20 +82,19 @@ impl<'a> Command for CommitCommand<'a> {
 #[cfg(test)]
 pub mod tests {
     use crate::{
-        commands::{command::Command, commit::CommitCommand, init::InitCommand},
+        commands::{add::AddCommand, command::Command, commit::CommitCommand, init::InitCommand},
         database::{blob::Blob, commit::Commit, database::Database, object::Object, tree::Tree},
         internals::repository::Repository,
         utils::modes::{MODE_DIR, MODE_FILE},
     };
     use anyhow::Context;
-    use std::fs;
+    use std::{fs, path::PathBuf};
     use tempfile::tempdir;
 
     #[test]
     fn commit_with_parent_and_mode() -> anyhow::Result<()> {
         let dir = tempdir()?;
         let repo_path_str = dir.path().to_string_lossy().to_string();
-
         InitCommand::new(Some(repo_path_str.clone()), true).run()?;
         let mut repo = Repository::open(Some(repo_path_str))?;
 
@@ -98,31 +103,37 @@ pub mod tests {
 
         let main_content = "fn main() {println!(\"Hello World\");}";
         let readme_content = "Readme file";
-
         let src_path = dir.path().join("src");
         fs::create_dir_all(&src_path)?;
         fs::write(src_path.join("main.rs"), main_content)?;
         fs::write(src_path.join("lib.rs"), "")?;
         fs::write(dir.path().join("README.md"), readme_content)?;
 
-        repo.add(".")?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("."),
+        }
+        .run()?;
         CommitCommand::new(&mut repo, "Initial commit".to_string())?.run()?;
-        let first_commit_id = repo.refs.head_commit()?;
 
+        let first_commit_id = repo.refs.head_commit()?;
         let updated_readme = "Updated Readme file";
         fs::write(dir.path().join("README.md"), updated_readme)?;
-        repo.add(".")?;
-        CommitCommand::new(&mut repo, "Second commit".to_string())?.run()?;
-        let second_commit_id = repo.refs.head_commit()?;
 
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("."),
+        }
+        .run()?;
+        CommitCommand::new(&mut repo, "Second commit".to_string())?.run()?;
+
+        let second_commit_id = repo.refs.head_commit()?;
         let db = Database::open(repo.flux_dir.clone());
         let obj = db.read_object(&second_commit_id)?;
         let second_commit = obj.as_any().downcast_ref::<Commit>().expect("Not a commit");
-
         assert_eq!(second_commit.parent_hash(), Some(first_commit_id.as_str()));
 
         let file_map = db.commit_to_map(second_commit_id)?;
-
         let expected_files = vec![
             ("src/main.rs", main_content),
             ("README.md", updated_readme),
@@ -146,7 +157,6 @@ pub mod tests {
             .as_any()
             .downcast_ref::<Tree>()
             .expect("Not a tree");
-
         for entry in tree.entries() {
             if entry.is_dir() {
                 assert_eq!(entry.mode, MODE_DIR);
@@ -169,7 +179,8 @@ pub mod tests {
             dir.path().join("main.rs"),
             "fn main() {println!(\"Hello World\");}",
         )?;
-        repo.add(".")?;
+        
+        AddCommand { repo: &mut repo, path: PathBuf::from(".") }.run()?;
 
         let res = repo.commit("Initial commit".to_string());
         let err = res.unwrap_err();

@@ -1,6 +1,5 @@
 use crate::{
-    commands::command::Command,
-    internals::{config::Config, index::Index, refs::Refs, work_tree::WorkTree},
+    commands::command::Command, dircache::index::Index, internals::{config::Config, refs::Refs, work_tree::WorkTree}
 };
 use std::{fs, path::PathBuf};
 
@@ -40,7 +39,7 @@ impl Command for InitCommand {
         fs::create_dir_all(flux_dir.join("objects"))?;
         Refs::new(&flux_dir)?;
         Config::default(flux_dir.join("config"))?;
-        Index::new(&flux_dir)?;
+        Index::new(flux_dir.join("index"));
         WorkTree::new(work_tree_path);
 
         Ok(())

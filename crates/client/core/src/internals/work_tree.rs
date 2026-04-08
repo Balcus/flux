@@ -4,6 +4,7 @@ use crate::database::database::Database;
 use crate::database::object::Object;
 use crate::database::tree::Tree;
 use crate::database::tree_entry::TreeEntry;
+use crate::dircache::index::Index;
 use crate::error;
 use anyhow::Context;
 use std::collections::HashMap;
@@ -268,23 +269,24 @@ impl WorkTree {
         Ok(())
     }
 
-    pub fn build_tree_from_index(
-        &self,
-        index: &HashMap<String, String>,
-        db: &Database,
-    ) -> anyhow::Result<String> {
-        let root = self.build_tree_structure(index);
+    pub fn build_tree_from_index(&self, index: &Index, db: &Database) -> anyhow::Result<String> {
+        let flat: HashMap<String, String> = index
+            .entries
+            .iter()
+            .filter(|((_, stage), _)| *stage == 0)
+            .map(|((path, _), entry)| (path.clone(), hex::encode(entry.id)))
+            .collect();
+
+        let root = self.build_tree_structure(&flat);
         let hash = self.create_tree_object(&root, db)?;
         Ok(hash)
     }
 
     fn build_tree_structure(&self, index: &HashMap<String, String>) -> TreeNode {
         let mut root = TreeNode::Dir(HashMap::new());
-
         for (path, hash) in index {
             let parts: Vec<&str> = path.split('/').collect();
             let mut current = &mut root;
-
             for (i, part) in parts.iter().enumerate() {
                 if i == parts.len() - 1 {
                     if let TreeNode::Dir(map) = current {
@@ -297,7 +299,6 @@ impl WorkTree {
                 }
             }
         }
-
         root
     }
 

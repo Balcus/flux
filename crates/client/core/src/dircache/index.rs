@@ -71,6 +71,14 @@ impl Index {
         Ok(())
     }
 
+    pub fn rm(&mut self, pathname: String) -> anyhow::Result<()> {
+        for stage in 0..=3 {
+            self.entries.remove(&(pathname.clone(), stage));
+        }
+        self.changed = true;
+        Ok(())
+    }
+
     pub fn write_updates(&mut self) -> anyhow::Result<()> {
         if !self.changed {
             self.lock.rollback()?;
@@ -97,10 +105,10 @@ impl Index {
 
 #[cfg(test)]
 mod tests {
-    use tempfile::{tempdir, TempDir};
     use super::*;
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
+    use tempfile::{TempDir, tempdir};
 
     fn setup_file(dir: &TempDir, name: &str, executable: bool) -> (String, String, Metadata) {
         let path = dir.path().join(name);
@@ -122,7 +130,7 @@ mod tests {
         let tmp = tempdir().unwrap();
         let index_path = tmp.path().join("index");
         let index = Index::new(index_path);
-        
+
         assert!(index.entries.is_empty());
         assert!(!index.changed);
     }
@@ -146,11 +154,11 @@ mod tests {
     fn write_and_load_cycle() -> anyhow::Result<()> {
         let tmp = tempdir().unwrap();
         let index_path = tmp.path().join("index");
-        
+
         let mut index = Index::new(index_path.clone());
         let (p1, s1, m1) = setup_file(&tmp, "a.txt", false);
         let (p2, s2, m2) = setup_file(&tmp, "b.txt", true);
-        
+
         index.add(p1.clone(), s1.clone(), m1)?;
         index.add(p2.clone(), s2.clone(), m2)?;
         index.write_updates()?;
@@ -159,13 +167,13 @@ mod tests {
         new_index.load()?;
 
         assert_eq!(new_index.entries.len(), 2);
-        
+
         let entry_a = new_index.entries.get(&(p1, 0)).unwrap();
         assert_eq!(entry_a.mode, 0o100644);
 
         let entry_b = new_index.entries.get(&(p2, 0)).unwrap();
         assert_eq!(entry_b.mode, 0o100755);
-        
+
         Ok(())
     }
 }

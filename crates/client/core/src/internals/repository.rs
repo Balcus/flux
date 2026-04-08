@@ -1,14 +1,14 @@
-use crate::database::blob::Blob;
 use crate::database::commit::Commit;
 use crate::database::database::Database;
 use crate::database::object::Object;
 use crate::database::object_type::ObjectType;
+use crate::dircache::index::Index;
 use crate::error;
 use crate::internals::config::{Config, Field};
 use crate::internals::grpc_client::GrpcClient;
-use crate::internals::index::Index;
 use crate::internals::refs::Refs;
 use crate::internals::work_tree::WorkTree;
+use crate::status::status_impl::Status;
 use flate2::Compression;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
@@ -26,7 +26,6 @@ pub struct Repository {
     pub work_tree: WorkTree,
     pub flux_dir: PathBuf,
     pub config: Config,
-    pub index: Index,
 }
 
 impl Repository {
@@ -58,7 +57,6 @@ impl Repository {
 
         let config_path = store_dir.join("config");
         let config = Config::from(&config_path)?;
-        let index = Index::load(&store_dir)?;
         let refs = Refs::load(&store_dir)?;
 
         Ok(Self {
@@ -66,9 +64,19 @@ impl Repository {
             work_tree: WorkTree::new(work_tree_path),
             flux_dir: store_dir,
             config,
-            index,
             name: repo_name,
         })
+    }
+
+    fn load_index(&self) -> anyhow::Result<Index> {
+        let mut index = Index::new(self.flux_dir.join("index"));
+        index.load()?;
+        Ok(index)
+    }
+
+    fn load_status(&self) -> anyhow::Result<Status> {
+        let status = Status::new(&self)?;
+        Ok(status)
     }
 
     pub async fn auth(&mut self, url: Option<String>) -> Result<()> {
@@ -123,116 +131,19 @@ impl Repository {
         Ok(())
     }
 
-    pub fn add(&mut self, path: &str) -> Result<()> {
-        let full_path = self.work_tree.path().join(path);
-        self.add_path(&full_path)?;
-        self.remove_deleted_files_from_index(path)?;
-        Ok(())
-    }
+    pub fn commit(&mut self, message: String) -> anyhow::Result<String> {
+        let index = self.load_index()?;
+        let status = self.load_status()?;
 
-    fn add_path(&mut self, path: &Path) -> Result<()> {
-        let metadata = fs::metadata(path).map_err(|e| error::IoError::metadata_error(path, e))?;
-
-        if metadata.is_file() {
-            self.add_file(path)?;
-        } else if metadata.is_dir() {
-            if path.ends_with(".flux") {
-                return Ok(());
-            }
-
-            let iter = fs::read_dir(path).map_err(|e| error::IoError::read_error(path, e))?;
-            for entry in iter {
-                let entry = entry.map_err(|e| error::IoError::read_error(path, e))?;
-                self.add_path(&entry.path())?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn add_file(&mut self, path: &Path) -> Result<()> {
-        let data = self.work_tree.read_file(path).unwrap();
-        let blob = Blob::from_bytes(data);
-        let blob_id = blob.id();
-
-        let db = Database::open(self.flux_dir.clone());
-        db.store(Box::new(blob)).unwrap();
-
-        let rel_path = path.strip_prefix(self.work_tree.path()).map_err(|e| {
-            error::RepositoryError::from(
-                "Failed to strip prefix from file. file might be outside of the working directory",
-                e,
-            )
-        })?;
-
-        let rel_str = rel_path
-            .to_str()
-            .ok_or_else(|| error::RepositoryError::PathName {
-                path: rel_path.to_owned(),
-            })?;
-
-        self.index.add(rel_str.to_owned(), blob_id)?;
-        Ok(())
-    }
-
-    fn remove_deleted_files_from_index(&mut self, path: &str) -> Result<()> {
-        let full_path = self.work_tree.path().join(path);
-        let metadata =
-            fs::metadata(&full_path).map_err(|e| error::IoError::metadata_error(&full_path, e))?;
-
-        if metadata.is_dir() {
-            let prefix = if path == "." {
-                String::new()
-            } else {
-                format!("{}/", path.trim_end_matches('/'))
-            };
-
-            let indexed_files: Vec<String> = self
-                .index
-                .map
-                .keys()
-                .filter(|k| prefix.is_empty() || k.starts_with(&prefix))
-                .cloned()
-                .collect();
-
-            for indexed_path in indexed_files {
-                let file_full_path = self.work_tree.path().join(&indexed_path);
-                if !file_full_path.exists() {
-                    self.index.remove(&indexed_path)?;
-                    println!("Removed deleted file from index: {}", indexed_path);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn delete(&mut self, rel: &str) -> Result<()> {
-        let abs = self.work_tree.path().join(rel);
-
-        let key = abs
-            .to_str()
-            .ok_or_else(|| error::RepositoryError::PathName { path: abs.clone() })?;
-
-        let removed = self.index.remove(key)?;
-
-        if !removed {
-            eprint!("warning: {key} is not tracked");
-        }
-
-        Ok(())
-    }
-
-    pub fn commit(&mut self, message: String) -> Result<String> {
-        if self.index.is_empty() {
-            return Err(error::RepositoryError::IndexEmpty);
+        if status.is_clean() {
+            anyhow::bail!("Working tree clean, nothing to commit.");
         }
 
         let db = Database::open(self.flux_dir.clone());
 
         let tree_hash = self
             .work_tree
-            .build_tree_from_index(&self.index.map, &db)
+            .build_tree_from_index(&index, &db)
             .unwrap();
 
         let credentials = self
@@ -293,29 +204,6 @@ impl Repository {
 
     pub fn delete_branch(&mut self, name: &str) -> Result<()> {
         self.refs.delete_branch(name)?;
-        Ok(())
-    }
-
-    pub fn switch_branch(&mut self, name: &str, force: bool) -> Result<()> {
-        if !self.refs.exists(name) {
-            return Err(error::RepositoryError::Refs(
-                error::RefsError::MissingBranch(name.to_string()),
-            ));
-        }
-
-        if self.has_uncommitted_changes() && !force {
-            return Err(error::RepositoryError::UncommitedChanges);
-        }
-
-        self.refs.switch_branch(name)?;
-        self.index.clear()?;
-        self.work_tree.clear()?;
-        let commit = self.refs.head_commit()?;
-
-        if !commit.is_empty() {
-            self.work_tree.restore_from_commit(&commit)?;
-        }
-
         Ok(())
     }
 
@@ -434,28 +322,32 @@ impl Repository {
         Ok(commit.id())
     }
 
-    fn has_uncommitted_changes(&self) -> bool {
-        let Ok(head_commit_hash) = self.refs.head_commit() else {
-            return false;
-        };
+    pub fn switch_branch(&mut self, name: &str, force: bool) -> anyhow::Result<()> {
+        if !self.refs.exists(name) {
+            anyhow::bail!("Missing target branch: {}.", name);
+        }
 
-        let db = Database::open(self.flux_dir.clone());
+        if !force {
+            let status = self.load_status()?;
+            if status.has_staged_changes() {
+                anyhow::bail!(
+                    "There are still uncommited changes, use --force if you are sure about what you are doing."
+                )
+            }
+        }
 
-        let Ok(commit_obj) = db.read_object(&head_commit_hash) else {
-            return false;
-        };
+        self.refs.switch_branch(name)?;
 
-        let Some(commit) = commit_obj.as_any().downcast_ref::<Commit>() else {
-            return false;
-        };
+        let mut index = self.load_index()?;
+        index.entries.clear();
+        index.write_updates()?;
 
-        let head_tree_hash = commit.tree_hash.clone();
+        self.work_tree.clear()?;
+        let commit = self.refs.head_commit()?;
+        if !commit.is_empty() {
+            self.work_tree.restore_from_commit(&commit)?;
+        }
 
-        let Ok(current_tree_hash) = self.work_tree.build_tree_from_index(&self.index.map, &db)
-        else {
-            return false;
-        };
-
-        head_tree_hash != current_tree_hash
+        Ok(())
     }
 }
