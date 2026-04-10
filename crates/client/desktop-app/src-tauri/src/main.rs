@@ -4,10 +4,6 @@
 use std::sync::Mutex;
 use desktop_app_lib::{commands, models::app_state::AppState};
 
-pub struct AppState {
-    repository: Mutex<Option<Repository>>
-}
-
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
