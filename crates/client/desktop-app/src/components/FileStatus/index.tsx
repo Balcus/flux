@@ -12,17 +12,17 @@ export default function FileStatus() {
   useEffect(() => {
     const interval = setInterval(() => {
       refreshRepository();
-    }, 5000);
+    }, 2000);
     return () => clearInterval(interval);
   }, []);
 
-  const handleStage = async (path: string) => {
-    await invoke("add_file", { path });
+  const handleAdd = async (path: string) => {
+    await invoke("add", { path });
     await refreshRepository();
   };
 
-  const handleUnstage = async (path: string) => {
-    await invoke("unstage_file", { path });
+  const handleRm = async (path: string) => {
+    await invoke("reset", { path });
     await refreshRepository();
   };
 
@@ -31,26 +31,35 @@ export default function FileStatus() {
       <div className="action-bar">
         <ActionBar />
       </div>
+
       <div className="staged">
         <ul>
           {repository?.status.staged.map((item) => (
             <li key={item.path}>
               <span>{item.path}</span>
-              <button onClick={() => handleUnstage(item.path)}>-</button>
+              <button onClick={() => handleRm(item.path)}>-</button>
             </li>
           ))}
         </ul>
       </div>
+
       <div className="untracked">
         <ul>
+          {repository?.status.unstaged.map((item) => (
+            <li key={item.path}>
+              <span>{item.path}</span>
+              <button onClick={() => handleAdd(item.path)}>+</button>
+            </li>
+          ))}
           {repository?.status.untracked.map((item) => (
             <li key={item}>
               <span>{item}</span>
-              <button onClick={() => handleStage(item)}>+</button>
+              <button onClick={() => handleAdd(item)}>+</button>
             </li>
           ))}
         </ul>
       </div>
+
       <div className="diffs"></div>
     </div>
   );

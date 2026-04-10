@@ -6,3 +6,4 @@ pub mod init;
 pub mod status;
 pub mod add;
 pub mod rm;
+pub mod reset;

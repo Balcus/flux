@@ -1,11 +1,10 @@
 use std::path::PathBuf;
-
 use crate::models::{
     app_state::AppState, branch_info::BranchInfo, commit_info::CommitInfo,
     repository_info::RepositoryInfo,
 };
 use flux_core::{
-    commands::{add::AddCommand, command::Command},
+    commands::{add::AddCommand, command::Command, reset::ResetCommand, rm::RmCommand},
     database::{commit::Commit, database::Database},
     error::{ConfigError, RefsError},
     internals::repository::Repository,
@@ -167,7 +166,7 @@ pub fn get_commits(state: State<AppState>) -> Result<Vec<CommitInfo>, String> {
 }
 
 #[tauri::command]
-pub fn add_file(path: String, state: State<AppState>) -> Result<(), String> {
+pub fn add(path: String, state: State<AppState>) -> Result<(), String> {
     let mut repo_lock = state.repository.lock().unwrap();
     let repo = repo_lock
         .as_mut()
@@ -178,5 +177,39 @@ pub fn add_file(path: String, state: State<AppState>) -> Result<(), String> {
         path: PathBuf::from(path),
     };
 
+    cmd.run().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn rm(path: String, state: State<AppState>) -> Result<(), String> {
+    let mut repo_lock = state.repository.lock().unwrap();
+    let repo = repo_lock
+        .as_mut()
+        .ok_or_else(|| "No repository open".to_string())?;
+    let mut cmd = RmCommand {
+        repo,
+        path
+    };
+
+    cmd.run().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn reset_soft(path:String, state: State<AppState>) -> Result<(), String> {
+    let mut repo_lock = state.repository.lock().unwrap();
+    let repo = repo_lock
+        .as_mut()
+        .ok_or_else(|| "No repository open".to_string())?;
+    let mut cmd = ResetCommand::new(repo, path, false);
+    cmd.run().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn reset_hard(path:String, state: State<AppState>) -> Result<(), String> {
+    let mut repo_lock = state.repository.lock().unwrap();
+    let repo = repo_lock
+        .as_mut()
+        .ok_or_else(|| "No repository open".to_string())?;
+    let mut cmd = ResetCommand::new(repo, path, true);
     cmd.run().map_err(|e| e.to_string())
 }

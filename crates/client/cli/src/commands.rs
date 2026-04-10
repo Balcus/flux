@@ -2,8 +2,11 @@ use std::path::PathBuf;
 
 use flux_core::{
     commands::{
-        add::AddCommand, command::Command, commit::CommitCommand, diff::DiffCommand, hash_object::HashObject, init::InitCommand, status::StatusCommand
-    }, dircache::index::Index, internals::repository::Repository
+        add::AddCommand, command::Command, commit::CommitCommand, diff::DiffCommand,
+        hash_object::HashObject, init::InitCommand, reset::ResetCommand, rm::RmCommand,
+        status::StatusCommand,
+    },
+    internals::repository::Repository,
 };
 
 pub fn init(path: Option<String>, force: bool) -> anyhow::Result<()> {
@@ -46,16 +49,6 @@ pub fn add(repo_path: Option<String>, path: String) -> anyhow::Result<()> {
     }
     .run()?;
     println!("Added {path} to index");
-    Ok(())
-}
-
-pub fn remove(repo_path: Option<String>, path: String) -> anyhow::Result<()> {
-    let repository = Repository::open(repo_path)?;
-    let mut index = Index::new(repository.flux_dir.join("index"));
-    index.load()?;
-    index.rm(path.clone())?;
-    index.write_updates()?;
-    println!("Deleted {path} from index");
     Ok(())
 }
 
@@ -128,5 +121,17 @@ pub async fn auth(repo_path: Option<String>, url: Option<String>) -> anyhow::Res
 pub fn diff(repo_path: Option<String>, staged: bool) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
     DiffCommand::new(&mut repository, staged)?.run()?;
+    Ok(())
+}
+
+pub fn reset(repo_path: Option<String>, path: String, hard: bool) -> anyhow::Result<()> {
+    let mut repository = Repository::open(repo_path)?;
+    ResetCommand::new(&mut repository, path, hard).run()?;
+    Ok(())
+}
+
+pub fn rm(repo_path: Option<String>, path: String) -> anyhow::Result<()> {
+    let mut repository = Repository::open(repo_path)?;
+    RmCommand::new(&mut repository, path);
     Ok(())
 }

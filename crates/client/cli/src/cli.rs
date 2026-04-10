@@ -95,7 +95,7 @@ pub enum Commands {
     },
 
     /// Remove a file or directory from the staging area
-    Delete {
+    Rm {
         path: String,
     },
 
@@ -147,4 +147,11 @@ pub enum Commands {
         #[arg(long = "staged")]
         staged: bool,
     },
+    /// Resets the given file to the last commited version
+    Reset {
+        path: String,
+
+        #[arg(long = "hard")]
+        hard: bool,
+    }
 }

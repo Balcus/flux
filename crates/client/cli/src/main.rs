@@ -32,8 +32,8 @@ async fn main() -> anyhow::Result<()> {
         Commands::Add { path } => {
             commands::add(repo_path, path)?;
         }
-        Commands::Delete { path } => {
-            commands::remove(repo_path, path)?;
+        Commands::Rm { path } => {
+            commands::rm(repo_path, path)?;
         }
         Commands::Commit { message } => {
             commands::commit(repo_path, message)?;
@@ -73,6 +73,9 @@ async fn main() -> anyhow::Result<()> {
         Commands::Diff { staged } => {
             commands::diff(repo_path, staged)?;
         }
+        Commands::Reset { path, hard } => {
+            commands::reset(repo_path, path, hard)?;
+        },
     }
 
     Ok(())

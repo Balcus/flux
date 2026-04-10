@@ -1,11 +1,11 @@
+use crate::models::{
+    branch_info::BranchInfo,
+    status_info::{StagedFile, StatusInfo},
+};
 use flux_core::{
-    error::ConfigError,
-    internals::repository::Repository,
-    status::status_impl::{ChangeType, Status},
+    error::ConfigError, internals::repository::Repository, status::status_impl::Status,
 };
 use serde::Serialize;
-
-use crate::models::{branch_info::BranchInfo, status_info::{StagedFile, StatusInfo}};
 
 #[derive(Serialize)]
 pub struct RepositoryInfo {
@@ -16,7 +16,7 @@ pub struct RepositoryInfo {
     pub user_name: Option<String>,
     pub user_email: Option<String>,
     pub origin: Option<String>,
-    pub status: StatusInfo
+    pub status: StatusInfo,
 }
 
 impl RepositoryInfo {
@@ -33,7 +33,6 @@ impl RepositoryInfo {
                 name,
             })
             .collect();
-
         branches.sort_by(|a, b| a.name.cmp(&b.name));
 
         let user_name = repo
@@ -56,11 +55,16 @@ impl RepositoryInfo {
             .iter()
             .map(|(path, change)| StagedFile {
                 path: path.clone(),
-                change_type: match change {
-                    ChangeType::Added => "Added".to_string(),
-                    ChangeType::Modified => "Modified".to_string(),
-                    ChangeType::Deleted => "Deleted".to_string(),
-                },
+                change_type: change.to_string(),
+            })
+            .collect();
+
+        let unstaged: Vec<StagedFile> = status
+            .workspace_changes
+            .iter()
+            .map(|(path, change)| StagedFile {
+                path: path.clone(),
+                change_type: change.to_string(),
             })
             .collect();
 
@@ -73,8 +77,9 @@ impl RepositoryInfo {
             user_email,
             origin,
             status: StatusInfo {
-                untracked: status.untracked,
                 staged,
+                unstaged,
+                untracked: status.untracked,
             },
         })
     }

@@ -4,6 +4,7 @@ use crate::database::object::Object;
 use crate::dircache::index::Index;
 use crate::internals::repository::Repository;
 use crate::internals::work_tree::WorkTree;
+use crate::status::change_type::ChangeType;
 use anyhow::Result;
 use anyhow::anyhow;
 use std::collections::HashMap;
@@ -15,13 +16,6 @@ pub struct Status {
     pub index_changes: HashMap<String, ChangeType>,
     pub workspace_changes: HashMap<String, ChangeType>,
     pub untracked: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ChangeType {
-    Added,
-    Modified,
-    Deleted,
 }
 
 impl Status {

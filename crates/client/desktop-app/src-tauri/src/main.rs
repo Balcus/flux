@@ -19,7 +19,10 @@ fn main() {
             commands::update_origin,
             commands::get_branches,
             commands::get_commits,
-            commands::add_file
+            commands::add,
+            commands::rm,
+            commands::reset_soft,
+            commands::reset_hard
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
