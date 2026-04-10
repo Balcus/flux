@@ -1,14 +1,16 @@
-use std::any::Any;
-
-use crate::objects::object_type::FluxObject;
-use crate::utils;
-
 use super::object_type::ObjectType;
+use crate::database::object::Object;
+use crate::utils;
 use chrono::Local;
+use std::any::Any;
+use std::fmt;
 
+#[derive(Clone)]
 pub struct Commit {
     parent_hash: Option<String>,
     pub tree_hash: String,
+    pub message: String,
+    pub author: String,
     pub content: Vec<u8>,
 }
 
@@ -26,17 +28,15 @@ impl Commit {
             None => String::new(),
         };
         let content = format!(
-            "tree {}\n{}author {} <{}> {} {}\ncommitter {} <{}> {} {}\n\n{}",
+            "tree {}\n{}author {} <{}> {}\ncommitter {} <{}> {}\n\n{}",
             tree_hash,
             parent_line,
             user_name,
             user_email,
-            now.timestamp(),
-            now.format("%z"),
+            now.format("%a %b %e %H:%M:%S %Y %z"),
             user_name,
             user_email,
-            now.timestamp(),
-            now.format("%z"),
+            now.format("%a %b %e %H:%M:%S %Y %z"),
             message
         )
         .as_bytes()
@@ -46,6 +46,8 @@ impl Commit {
             content,
             parent_hash,
             tree_hash,
+            message,
+            author: user_name,
         }
     }
 
@@ -54,12 +56,25 @@ impl Commit {
 
         let mut tree_hash = String::new();
         let mut parent_hash = None;
+        let mut author = String::new();
+        let mut message = String::new();
+        let mut in_message = false;
 
         for line in content_str.lines() {
-            if line.starts_with("tree ") {
+            if in_message {
+                if !message.is_empty() {
+                    message.push('\n');
+                }
+                message.push_str(line);
+            } else if line.is_empty() {
+                in_message = true;
+            } else if line.starts_with("tree ") {
                 tree_hash = line.strip_prefix("tree ").unwrap_or("").to_string();
             } else if line.starts_with("parent ") {
                 parent_hash = Some(line.strip_prefix("parent ").unwrap_or("").to_string());
+            } else if line.starts_with("author ") {
+                let raw = line.strip_prefix("author ").unwrap_or("");
+                author = raw.split('<').next().unwrap_or(raw).trim().to_string();
             }
         }
 
@@ -67,6 +82,8 @@ impl Commit {
             content,
             parent_hash,
             tree_hash,
+            message,
+            author,
         }
     }
 
@@ -79,12 +96,12 @@ impl Commit {
     }
 }
 
-impl FluxObject for Commit {
+impl Object for Commit {
     fn object_type(&self) -> ObjectType {
         ObjectType::Commit
     }
 
-    fn hash(&self) -> String {
+    fn id(&self) -> String {
         let header = format!("commit {}\0", self.content.len());
         let mut full = Vec::new();
         full.extend_from_slice(header.as_bytes());
@@ -97,11 +114,7 @@ impl FluxObject for Commit {
         let mut full = Vec::new();
         full.extend_from_slice(header.as_bytes());
         full.extend_from_slice(&self.content);
-        utils::compress(&full)
-    }
-
-    fn print(&self) {
-        println!("{}", self.to_string())
+        full
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -110,5 +123,11 @@ impl FluxObject for Commit {
 
     fn content(&self) -> Vec<u8> {
         self.content.clone()
+    }
+}
+
+impl fmt::Display for Commit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string())
     }
 }

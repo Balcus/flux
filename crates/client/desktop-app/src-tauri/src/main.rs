@@ -2,14 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::sync::Mutex;
-use flux_core::internals::repository::Repository;
-
-mod commands;
-mod models;
-
-pub struct AppState {
-    repository: Mutex<Option<Repository>>
-}
+use desktop_app_lib::{commands, models::app_state::AppState};
 
 fn main() {
     tauri::Builder::default()
@@ -25,6 +18,11 @@ fn main() {
             commands::update_user_config,
             commands::update_origin,
             commands::get_branches,
+            commands::get_commits,
+            commands::add,
+            commands::rm,
+            commands::reset_soft,
+            commands::reset_hard
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

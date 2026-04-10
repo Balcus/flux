@@ -1,7 +1,5 @@
 pub mod config;
-mod grpc_client;
-mod index;
-mod object_store;
-mod refs;
+pub mod grpc_client;
+pub mod refs;
 pub mod repository;
-mod work_tree;
+pub mod work_tree;

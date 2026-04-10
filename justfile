@@ -1,3 +1,5 @@
+flux_bin := "/Users/balcus/Documents/Projects/flux/target/debug/flux"
+
 build-client:
     cargo build -p flux -p flux-core -p desktop-app
 
@@ -11,9 +13,6 @@ build: build-proto build-server build-client
 
 server: build-server
     cargo run -p flux_server -- -s "secret"
-
-server-cleanup:
-    rm -rf crates/server/uploads
 
 clean-build:
     rm -rf target
@@ -49,3 +48,7 @@ push COMMIT_MSG:
     git diff --exit-code || git add -A
     git diff --cached --exit-code || git commit -m "{{COMMIT_MSG}}"
     git push
+
+diff:
+    just build
+    (cd /Users/balcus/Documents/test-flux && {{flux_bin}} diff)

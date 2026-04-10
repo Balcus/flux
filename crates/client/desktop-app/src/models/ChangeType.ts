@@ -1,0 +1,1 @@
+export type ChangeType = "Added" | "Modified" | "Deleted";

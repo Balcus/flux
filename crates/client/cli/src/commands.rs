@@ -1,4 +1,17 @@
-use flux_core::internals::repository::Repository;
+use std::path::PathBuf;
+
+use flux_core::{
+    commands::{
+        add::AddCommand, command::Command, commit::CommitCommand, diff::DiffCommand,
+        hash_object::HashObject, init::InitCommand, reset::ResetCommand, rm::RmCommand,
+        status::StatusCommand,
+    },
+    internals::repository::Repository,
+};
+
+pub fn init(path: Option<String>, force: bool) -> anyhow::Result<()> {
+    InitCommand::new(path, force).run()
+}
 
 pub fn set(repo_path: Option<String>, key: String, value: String) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
@@ -12,11 +25,9 @@ pub fn cat_file(repo_path: Option<String>, hash: String) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn hash_object(repo_path: Option<String>, path: String, write: bool) -> anyhow::Result<String> {
-    let repository = Repository::open(repo_path)?;
-    let hash = repository.hash_object(path, write)?;
-    println!("{hash}");
-    Ok(hash)
+pub fn hash_object(path: String, write: bool) -> anyhow::Result<()> {
+    HashObject::new(&path, write).run()?;
+    Ok(())
 }
 
 pub fn commit_tree(
@@ -32,23 +43,19 @@ pub fn commit_tree(
 
 pub fn add(repo_path: Option<String>, path: String) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
-    repository.add(&path)?;
+    AddCommand {
+        repo: &mut repository,
+        path: PathBuf::from(&path),
+    }
+    .run()?;
     println!("Added {path} to index");
     Ok(())
 }
 
-pub fn remove(repo_path: Option<String>, path: String) -> anyhow::Result<()> {
+pub fn commit(repo_path: Option<String>, message: String) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
-    repository.delete(&path)?;
-    println!("Deleted {path} from index");
+    CommitCommand::new(&mut repository, message)?.run()?;
     Ok(())
-}
-
-pub fn commit(repo_path: Option<String>, message: String) -> anyhow::Result<String> {
-    let mut repository = Repository::open(repo_path)?;
-    let hash = repository.commit(message)?;
-    println!("{hash}");
-    Ok(hash)
 }
 
 pub fn log(repo_path: Option<String>) -> anyhow::Result<()> {
@@ -100,13 +107,31 @@ pub async fn clone(url: String, path: Option<String>) -> anyhow::Result<()> {
 }
 
 pub fn status(repo_path: Option<String>) -> anyhow::Result<()> {
-    let repository = Repository::open(repo_path)?;
-    repository.status()?;
+    let mut repository = Repository::open(repo_path)?;
+    StatusCommand::new(&mut repository).run()?;
     Ok(())
 }
 
 pub async fn auth(repo_path: Option<String>, url: Option<String>) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
     repository.auth(url).await?;
+    Ok(())
+}
+
+pub fn diff(repo_path: Option<String>, staged: bool) -> anyhow::Result<()> {
+    let mut repository = Repository::open(repo_path)?;
+    DiffCommand::new(&mut repository, staged)?.run()?;
+    Ok(())
+}
+
+pub fn reset(repo_path: Option<String>, path: String, hard: bool) -> anyhow::Result<()> {
+    let mut repository = Repository::open(repo_path)?;
+    ResetCommand::new(&mut repository, path, hard).run()?;
+    Ok(())
+}
+
+pub fn rm(repo_path: Option<String>, path: String) -> anyhow::Result<()> {
+    let mut repository = Repository::open(repo_path)?;
+    RmCommand::new(&mut repository, path);
     Ok(())
 }

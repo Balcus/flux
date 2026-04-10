@@ -13,5 +13,5 @@ pub struct Cli {
     pub secret: String,
 
     #[arg(long = "user-store-path")]
-    pub user_store_path: Option<String>
+    pub user_store_path: Option<String>,
 }

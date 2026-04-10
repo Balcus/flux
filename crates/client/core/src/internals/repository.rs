@@ -1,22 +1,21 @@
-use flate2::Compression;
-use flate2::read::GzDecoder;
-use flate2::write::GzEncoder;
-use tar::Archive;
+use crate::database::commit::Commit;
+use crate::database::database::Database;
+use crate::database::object::Object;
+use crate::database::object_type::ObjectType;
+use crate::dircache::index::Index;
 use crate::error;
 use crate::internals::config::{Config, Field};
 use crate::internals::grpc_client::GrpcClient;
-use crate::internals::index::Index;
-use crate::internals::object_store::ObjectStore;
 use crate::internals::refs::Refs;
 use crate::internals::work_tree::WorkTree;
-use crate::objects::blob::Blob;
-use crate::objects::commit::Commit;
-use crate::objects::object_type::{FluxObject, ObjectType};
-use crate::objects::tree::Tree;
-use std::collections::HashMap;
+use crate::status::status_impl::Status;
+use flate2::Compression;
+use flate2::read::GzDecoder;
+use flate2::write::GzEncoder;
 use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+use tar::Archive;
 
 pub type Result<T> = std::result::Result<T, error::RepositoryError>;
 
@@ -27,59 +26,9 @@ pub struct Repository {
     pub work_tree: WorkTree,
     pub flux_dir: PathBuf,
     pub config: Config,
-    pub index: Index,
-    pub object_store: ObjectStore,
 }
 
 impl Repository {
-    pub fn init(path: Option<String>, force: bool) -> Result<Self> {
-        let work_tree_path = path
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("."));
-
-        let work_tree_path = work_tree_path
-            .canonicalize()
-            .map_err(|e| error::IoError::metadata_error(&work_tree_path, e))?;
-
-        let repo_name = work_tree_path
-            .file_name()
-            .ok_or_else(|| error::RepositoryError::PathName {
-                path: work_tree_path.clone(),
-            })?
-            .to_string_lossy()
-            .to_string();
-
-        let flux_dir = work_tree_path.join(".flux");
-
-        if flux_dir.exists() && force {
-            fs::remove_dir_all(&flux_dir)
-                .map_err(|e| error::IoError::delete_error(&flux_dir, e))?;
-        } else if flux_dir.exists() && !force {
-            let abs = flux_dir.canonicalize().unwrap_or_else(|_| flux_dir.clone());
-            return Err(error::RepositoryError::AlreadyInitialized(abs));
-        }
-
-        fs::create_dir_all(&flux_dir).map_err(|e| error::IoError::create_error(&flux_dir, e))?;
-
-        let object_store = ObjectStore::new(&flux_dir)?;
-        let refs = Refs::new(&flux_dir)?;
-        let config = Config::default(flux_dir.join("config"))?;
-        let index = Index::new(&flux_dir)?;
-        let work_tree = WorkTree::new(work_tree_path);
-
-        let repo = Self {
-            work_tree,
-            object_store,
-            index,
-            flux_dir,
-            config,
-            refs,
-            name: repo_name,
-        };
-
-        Ok(repo)
-    }
-
     pub fn open(path: Option<String>) -> Result<Self> {
         let work_tree_path = path
             .map(PathBuf::from)
@@ -108,19 +57,26 @@ impl Repository {
 
         let config_path = store_dir.join("config");
         let config = Config::from(&config_path)?;
-        let index = Index::load(&store_dir)?;
-        let object_store = ObjectStore::load(&store_dir)?;
         let refs = Refs::load(&store_dir)?;
 
         Ok(Self {
             refs,
             work_tree: WorkTree::new(work_tree_path),
-            object_store,
             flux_dir: store_dir,
             config,
-            index,
             name: repo_name,
         })
+    }
+
+    fn load_index(&self) -> anyhow::Result<Index> {
+        let mut index = Index::new(self.flux_dir.join("index"));
+        index.load()?;
+        Ok(index)
+    }
+
+    fn load_status(&self) -> anyhow::Result<Status> {
+        let status = Status::new(&self)?;
+        Ok(status)
     }
 
     pub async fn auth(&mut self, url: Option<String>) -> Result<()> {
@@ -143,9 +99,9 @@ impl Repository {
     }
 
     pub async fn clone(url: String, path: Option<String>) -> Result<Self> {
-        let mut clinet = GrpcClient::connect_remote(url).await?;
-        let repo_name = clinet.repo_name()?;
-        let archive = clinet.clone_repository().await?;
+        let mut client = GrpcClient::connect_remote(url).await?;
+        let repo_name = client.repo_name()?;
+        let archive = client.clone_repository().await?;
         let path = path.clone().unwrap_or(".".to_string());
         let repo_path = PathBuf::from(path).join(repo_name);
         let flux_dir = repo_path.join(".flux");
@@ -166,8 +122,7 @@ impl Repository {
 
     pub fn restore_fs(&self) -> Result<()> {
         let last_commit = self.refs.head_commit()?;
-        self.work_tree
-            .restore_from_commit(&last_commit, &self.object_store)?;
+        self.work_tree.restore_from_commit(&last_commit)?;
         Ok(())
     }
 
@@ -176,194 +131,52 @@ impl Repository {
         Ok(())
     }
 
-    pub fn add(&mut self, path: &str) -> Result<()> {
-        let full_path = self.work_tree.path().join(path);
-        self.add_path(&full_path)?;
-        self.remove_deleted_files_from_index(path)?;
-        Ok(())
-    }
+    pub fn commit(&mut self, message: String) -> anyhow::Result<String> {
+        let index = self.load_index()?;
+        let status = self.load_status()?;
 
-    fn add_path(&mut self, path: &Path) -> Result<()> {
-        let metadata = fs::metadata(path).map_err(|e| error::IoError::metadata_error(path, e))?;
-
-        if metadata.is_file() {
-            self.add_file(path)?;
-        } else if metadata.is_dir() {
-            if path.ends_with(".flux") {
-                return Ok(());
-            }
-
-            let iter = fs::read_dir(path).map_err(|e| error::IoError::read_error(path, e))?;
-            for entry in iter {
-                let entry = entry.map_err(|e| error::IoError::read_error(path, e))?;
-                self.add_path(&entry.path())?;
-            }
+        if status.is_clean() {
+            anyhow::bail!("Working tree clean, nothing to commit.");
         }
 
-        Ok(())
-    }
-
-    fn add_file(&mut self, path: &Path) -> Result<()> {
-        let blob = Blob::new(path);
-        self.object_store.store(&blob)?;
-
-        let rel_path = path.strip_prefix(self.work_tree.path()).map_err(|e| {
-            error::RepositoryError::from(
-                "Failed to strip prefix from file. file might be outisde of the working directory",
-                e,
-            )
-        })?;
-
-        let rel_str = rel_path
-            .to_str()
-            .ok_or_else(|| error::RepositoryError::PathName {
-                path: rel_path.to_owned(),
-            })?;
-
-        self.index.add(rel_str.to_owned(), blob.hash())?;
-
-        Ok(())
-    }
-
-    fn remove_deleted_files_from_index(&mut self, path: &str) -> Result<()> {
-        let full_path = self.work_tree.path().join(path);
-        let metadata =
-            fs::metadata(&full_path).map_err(|e| error::IoError::metadata_error(&full_path, e))?;
-
-        if metadata.is_dir() {
-            let prefix = if path == "." {
-                String::new()
-            } else {
-                format!("{}/", path.trim_end_matches('/'))
-            };
-
-            let indexed_files: Vec<String> = self
-                .index
-                .map
-                .keys()
-                .filter(|k| prefix.is_empty() || k.starts_with(&prefix))
-                .cloned()
-                .collect();
-
-            for indexed_path in indexed_files {
-                let file_full_path = self.work_tree.path().join(&indexed_path);
-                if !file_full_path.exists() {
-                    self.index.remove(&indexed_path)?;
-                    println!("Removed deleted file from index: {}", indexed_path);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn delete(&mut self, rel: &str) -> Result<()> {
-        let abs = self.work_tree.path().join(rel);
-
-        let key = abs
-            .to_str()
-            .ok_or_else(|| error::RepositoryError::PathName { path: abs.clone() })?;
-
-        let removed = self.index.remove(key)?;
-
-        if !removed {
-            eprint!("warning: {key} is not tracked");
-        }
-
-        Ok(())
-    }
-
-    pub fn status(&self) -> Result<()> {
-        let index = &self.index.map;
-
-        let prev_commit_map = match self.refs.head_commit() {
-            Ok(hash) => self.object_store.commit_to_map(hash)?,
-            Err(_) => HashMap::new(),
-        };
-
-        let mut new_files = Vec::new();
-        let mut modified_files = Vec::new();
-        let mut deleted_files = Vec::new();
-
-        for (path, hash) in index {
-            if let Some(prev_hash) = prev_commit_map.get(path) {
-                if prev_hash != hash {
-                    modified_files.push(path.clone());
-                }
-            } else {
-                new_files.push(path.clone());
-            }
-        }
-
-        for (path, _) in &prev_commit_map {
-            if !index.contains_key(path) {
-                deleted_files.push(path.clone());
-            }
-        }
-
-        if new_files.is_empty() && modified_files.is_empty() && deleted_files.is_empty() {
-            println!("nothing to commit, working tree clean");
-            return Ok(());
-        }
-
-        println!("These changes will be included in the next commit:\n");
-        if !new_files.is_empty() {
-            println!("Added: ");
-            for file in new_files {
-                println!(" + {}", file);
-            }
-        }
-
-        if !modified_files.is_empty() {
-            println!("\nModified: ");
-            for file in modified_files {
-                println!(" ~ {}", file);
-            }
-        }
-
-        if !deleted_files.is_empty() {
-            println!("\nRemoved: ");
-            for file in deleted_files {
-                println!(" - {}", file);
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn commit(&mut self, message: String) -> Result<String> {
-        if self.index.is_empty() {
-            return Err(error::RepositoryError::IndexEmpty);
-        }
+        let db = Database::open(self.flux_dir.clone());
 
         let tree_hash = self
             .work_tree
-            .build_tree_from_index(&self.index.map, &self.object_store)?;
+            .build_tree_from_index(&index, &db)
+            .unwrap();
 
         let credentials = self
             .config
             .get_credentials()
             .map_err(error::RepositoryError::Credentials)?;
-        let user_name = credentials.user_name;
-        let user_email = credentials.user_email;
 
         let last = self.refs.head_commit()?;
         let parent = (!last.is_empty()).then_some(last);
-        let commit = Commit::new(tree_hash, user_name, user_email, parent, message);
-        self.object_store.store(&commit)?;
-        let hash = commit.hash();
+
+        let commit = Commit::new(
+            tree_hash,
+            credentials.user_name,
+            credentials.user_email,
+            parent,
+            message,
+        );
+
+        let hash = commit.id();
+        db.store(Box::new(commit)).unwrap();
         self.refs.update_head(&hash)?;
-        self.index.clear()?;
 
         Ok(hash)
     }
 
     pub fn log(&self, _reference: Option<String>) -> Result<()> {
+        let db = Database::open(self.flux_dir.clone());
         let mut current_hash = self.refs.head_commit().ok().filter(|s| !s.is_empty());
 
         while let Some(hash) = current_hash {
-            self.cat(&hash)?;
-            let current = self.object_store.retrieve_object(&hash)?;
+            let obj = db.read_object(&hash).unwrap();
+            println!("{}", obj);
+            let current = db.read_object(&hash).unwrap();
             if let Some(commit) = current.as_any().downcast_ref::<Commit>() {
                 current_hash = commit.parent_hash().map(String::from);
             } else {
@@ -391,24 +204,6 @@ impl Repository {
 
     pub fn delete_branch(&mut self, name: &str) -> Result<()> {
         self.refs.delete_branch(name)?;
-        Ok(())
-    }
-
-    pub fn switch_branch(&mut self, name: &str, force: bool) -> Result<()> {
-        if self.has_uncommitted_changes() && !force {
-            return Err(error::RepositoryError::UncommitedChanges);
-        }
-
-        self.refs.switch_branch(name)?;
-        self.index.clear()?;
-        self.work_tree.clear()?;
-        let commit = self.refs.head_commit()?;
-
-        if !commit.is_empty() {
-            self.work_tree
-                .restore_from_commit(&commit, &self.object_store)?
-        }
-
         Ok(())
     }
 
@@ -491,29 +286,10 @@ impl Repository {
         Ok(buf)
     }
 
-    pub fn hash_object(&self, path: String, write: bool) -> Result<String> {
-        let full_path = self.work_tree.path().join(&path);
-        let metadata = full_path
-            .metadata()
-            .map_err(|e| error::IoError::metadata_error(&full_path, e))?;
-        let object: Box<dyn FluxObject>;
-        if metadata.is_file() {
-            object = Box::new(Blob::new(&full_path));
-        } else {
-            object = Box::new(Tree::new(&full_path));
-        }
-
-        if write {
-            self.object_store.store(object.as_ref())?;
-        }
-
-        Ok(object.hash())
-    }
-
-    pub fn cat(&self, object_hash: &str) -> Result<()> {
-        let object = self.object_store.retrieve_object(object_hash)?;
-        object.print();
-
+    pub fn cat(&self, hash: &str) -> Result<()> {
+        let db = Database::open(self.flux_dir.clone());
+        let obj = db.read_object(hash).unwrap();
+        println!("{}", obj);
         Ok(())
     }
 
@@ -528,21 +304,50 @@ impl Repository {
             .get_credentials()
             .map_err(error::RepositoryError::Credentials)?;
 
-        let user_name = credentials.user_name;
-        let user_email = credentials.user_email;
-
-        let tree = self.object_store.retrieve_object(&tree_hash)?;
+        let db = Database::open(self.flux_dir.clone());
+        let tree = db.read_object(&tree_hash).unwrap();
 
         if tree.object_type() != ObjectType::Tree {
-            return Err(error::RepositoryError::CommitRoot { hash: tree.hash() });
+            return Err(error::RepositoryError::CommitRoot { hash: tree.id() });
         }
 
-        let commit = Commit::new(tree.hash(), user_name, user_email, parent_hash, message);
-        self.object_store.store(&commit)?;
-        Ok(commit.hash())
+        let commit = Commit::new(
+            tree.id(),
+            credentials.user_name,
+            credentials.user_email,
+            parent_hash,
+            message,
+        );
+        db.store(Box::new(commit.clone())).unwrap();
+        Ok(commit.id())
     }
 
-    fn has_uncommitted_changes(&self) -> bool {
-        !self.index.is_empty()
+    pub fn switch_branch(&mut self, name: &str, force: bool) -> anyhow::Result<()> {
+        if !self.refs.exists(name) {
+            anyhow::bail!("Missing target branch: {}.", name);
+        }
+
+        if !force {
+            let status = self.load_status()?;
+            if status.has_staged_changes() {
+                anyhow::bail!(
+                    "There are still uncommited changes, use --force if you are sure about what you are doing."
+                )
+            }
+        }
+
+        self.refs.switch_branch(name)?;
+
+        let mut index = self.load_index()?;
+        index.entries.clear();
+        index.write_updates()?;
+
+        self.work_tree.clear()?;
+        let commit = self.refs.head_commit()?;
+        if !commit.is_empty() {
+            self.work_tree.restore_from_commit(&commit)?;
+        }
+
+        Ok(())
     }
 }

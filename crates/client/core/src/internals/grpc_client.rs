@@ -8,6 +8,7 @@ use proto::models::{
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::transport::Channel;
 use url::Url;
+
 // TODO: on clone create the direcotry for the repository, change iside the directory and then do the rest
 // make the clone push to origin so it wont create a new folder on server if i just change the name of the local folder
 pub type Result<T> = std::result::Result<T, error::GrpcClientError>;
@@ -79,7 +80,7 @@ impl GrpcClient {
             .auth_client
             .issue_token(request)
             .await
-            .map_err(|e| error::GrpcClientError::Auth(e))?;
+            .map_err(error::GrpcClientError::Auth)?;
 
         Ok(response.into_inner())
     }

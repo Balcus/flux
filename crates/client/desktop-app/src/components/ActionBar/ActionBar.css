@@ -1,0 +1,36 @@
+.action-bar-items {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.action-bar-items li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 1rem;
+}
+
+.action-bar-items li button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.action-item-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--flux-blue);
+}
+
+.action-item-label {
+  font-size: 11px;
+  color: var(--subtitle-color);
+}

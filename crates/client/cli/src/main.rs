@@ -1,6 +1,5 @@
 use crate::cli::{BranchCommands, Cli, Commands};
 use clap::Parser;
-use flux_core::internals::repository::Repository;
 
 pub mod cli;
 pub mod commands;
@@ -12,7 +11,7 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.command {
         Commands::Init { path, force } => {
-            Repository::init(path, force)?;
+            commands::init(path, force)?;
         }
         Commands::Set { key, value } => {
             commands::set(repo_path, key, value)?;
@@ -21,7 +20,7 @@ async fn main() -> anyhow::Result<()> {
             commands::cat_file(repo_path, object_hash)?;
         }
         Commands::HashObject { path, write } => {
-            commands::hash_object(repo_path, path, write)?;
+            commands::hash_object(path, write)?;
         }
         Commands::CommitTree {
             tree_hash,
@@ -33,8 +32,8 @@ async fn main() -> anyhow::Result<()> {
         Commands::Add { path } => {
             commands::add(repo_path, path)?;
         }
-        Commands::Delete { path } => {
-            commands::remove(repo_path, path)?;
+        Commands::Rm { path } => {
+            commands::rm(repo_path, path)?;
         }
         Commands::Commit { message } => {
             commands::commit(repo_path, message)?;
@@ -64,13 +63,19 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Clone { url, path } => {
             commands::clone(url, path).await?;
-        },
-        Commands::Status {  } => {
+        }
+        Commands::Status {} => {
             commands::status(repo_path)?;
-        },
+        }
         Commands::Auth { url } => {
             commands::auth(repo_path, url).await?;
         }
+        Commands::Diff { staged } => {
+            commands::diff(repo_path, staged)?;
+        }
+        Commands::Reset { path, hard } => {
+            commands::reset(repo_path, path, hard)?;
+        },
     }
 
     Ok(())

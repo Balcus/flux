@@ -1,9 +1,9 @@
 use proto::models::push_service_server::PushService;
 use proto::models::{Chunk, UploadStatus, UploadStatusCode};
-use tokio::sync::Mutex;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::Mutex;
 use tonic::{Request, Response, Status, Streaming};
 
 use crate::user_store::UserStore;
@@ -11,12 +11,15 @@ use crate::user_store::UserStore;
 #[derive(Debug)]
 pub struct FluxPushService {
     upload_root: String,
-    user_store: Arc<Mutex<UserStore>>
+    user_store: Arc<Mutex<UserStore>>,
 }
 
 impl FluxPushService {
     pub fn new(upload_root: String, user_store: Arc<Mutex<UserStore>>) -> Self {
-        Self { upload_root, user_store }
+        Self {
+            upload_root,
+            user_store,
+        }
     }
 }
 
@@ -47,8 +50,16 @@ impl PushService for FluxPushService {
             .ok_or_else(|| Status::unauthenticated("Missing or invalid authorization token"))?
             .to_string();
 
-        if !self.user_store.lock().await.is_token_valid(user_name.clone(), user_email, access_token).await {
-            return Err(Status::permission_denied("Failed to validate user credentials"));
+        if !self
+            .user_store
+            .lock()
+            .await
+            .is_token_valid(user_name.clone(), user_email, access_token)
+            .await
+        {
+            return Err(Status::permission_denied(
+                "Failed to validate user credentials",
+            ));
         }
 
         let mut stream = request.into_inner();
@@ -80,17 +91,21 @@ impl PushService for FluxPushService {
             .join(safe_user_dir)
             .join(safe_repo_name);
 
-        tokio::fs::create_dir_all(&repo_dir).await.map_err(|e| {
-            Status::internal(format!("Failed to create directory: {}", e))
-        })?;
+        tokio::fs::create_dir_all(&repo_dir)
+            .await
+            .map_err(|e| Status::internal(format!("Failed to create directory: {}", e)))?;
 
         let archive_path = repo_dir.join(".flux.tar.gz");
         let mut file = tokio::fs::File::create(&archive_path)
             .await
             .map_err(|e| Status::internal(format!("Failed to create file: {}", e)))?;
 
-        file.write_all(&buf).await.map_err(|e| Status::internal(e.to_string()))?;
-        file.flush().await.map_err(|e| Status::internal(e.to_string()))?;
+        file.write_all(&buf)
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        file.flush()
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
 
         Ok(Response::new(UploadStatus {
             response_message: format!("Stored in {}/{}", safe_user_dir, safe_repo_name),

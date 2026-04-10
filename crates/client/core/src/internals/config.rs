@@ -11,7 +11,7 @@ pub enum Field {
     UserName,
     UserEmail,
     Origin,
-    AccessToken
+    AccessToken,
 }
 
 impl FromStr for Field {
@@ -34,7 +34,7 @@ impl fmt::Display for Field {
             Field::UserName => "user_name",
             Field::UserEmail => "user_email",
             Field::Origin => "origin",
-            Field::AccessToken => "access_token"
+            Field::AccessToken => "access_token",
         };
         write!(f, "{}", s)
     }
@@ -43,7 +43,7 @@ impl fmt::Display for Field {
 pub struct Credentials {
     pub user_name: String,
     pub user_email: String,
-    pub access_token: Option<String>
+    pub access_token: Option<String>,
 }
 
 #[derive(Debug)]
@@ -157,19 +157,17 @@ impl Config {
         Ok(Credentials {
             user_name: self.get_required(Field::UserName)?,
             user_email: self.get_required(Field::UserEmail)?,
-            access_token: self.get("access_token")?
+            access_token: self.get("access_token")?,
         })
     }
 
     pub fn get(&self, key: &str) -> Result<Option<String>, error::ConfigError> {
-    let field = key
-        .parse::<Field>()
-        .map_err(|_| error::ConfigError::UnsupportedField(key.to_string()))?;
+        let field = key
+            .parse::<Field>()
+            .map_err(|_| error::ConfigError::UnsupportedField(key.to_string()))?;
 
-    let val = self.map
-        .get(&field)
-        .and_then(|v| v.clone());
+        let val = self.map.get(&field).and_then(|v| v.clone());
 
-    Ok(val)
-}
+        Ok(val)
+    }
 }

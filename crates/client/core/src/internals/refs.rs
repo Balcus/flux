@@ -14,6 +14,7 @@ pub struct Refs {
 
 pub type Result<T> = std::result::Result<T, error::RefsError>;
 
+// TODO: change the switch branch logic, currently a commit no longer clears the index (it shouldnt have either)
 impl Refs {
     fn parse_head_ref(head_contents: &str) -> Result<String> {
         let s = head_contents.trim();
@@ -168,7 +169,7 @@ impl Refs {
     pub fn switch_branch(&mut self, to: &str) -> Result<()> {
         let path = self.refs_path.join("heads").join(to);
         if !path.is_file() {
-            return Err(error::RefsError::MissingBranch(to.to_string()))?;
+            return Err(error::RefsError::MissingBranch(to.to_string()));
         }
         self.set_head(to)?;
         Ok(())
@@ -221,5 +222,13 @@ impl Refs {
         }
 
         Ok(res)
+    }
+
+    pub fn exists(&self, name: &str) -> bool {
+        self.refs_path.join("heads").join(name).is_file()
+    }
+
+    pub fn get_branch_head(&self, branch: &str) -> Result<Option<String>> {
+        Ok(self.branches.get(branch).cloned())
     }
 }

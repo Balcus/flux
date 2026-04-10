@@ -1,13 +1,4 @@
-use std::{any::Any, fmt};
-
-pub trait FluxObject {
-    fn object_type(&self) -> ObjectType;
-    fn hash(&self) -> String;
-    fn serialize(&self) -> Vec<u8>;
-    fn print(&self);
-    fn as_any(&self) -> &dyn Any;
-    fn content(&self) -> Vec<u8>;
-}
+use std::fmt;
 
 #[derive(PartialEq, Debug)]
 pub enum ObjectType {
