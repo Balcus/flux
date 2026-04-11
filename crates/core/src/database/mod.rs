@@ -8,3 +8,4 @@ pub mod object_type;
 pub mod raw_object;
 pub mod tree;
 pub mod tree_entry;
+pub mod walker;

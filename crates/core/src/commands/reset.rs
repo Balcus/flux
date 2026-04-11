@@ -1,10 +1,10 @@
-use std::path::PathBuf;
 use crate::{
     commands::command::Command,
-    database::{blob::Blob, database::Database},
+    database::{blob::Blob, database::Database, walker::Walker},
     dircache::index::Index,
     internals::repository::Repository,
 };
+use std::path::PathBuf;
 
 pub struct ResetCommand<'a> {
     pub repo: &'a mut Repository,
@@ -17,31 +17,20 @@ impl<'a> ResetCommand<'a> {
         ResetCommand {
             repo,
             path: PathBuf::from(path_s),
-            hard
+            hard,
         }
     }
 
-    pub fn soft_reset(&mut self) -> anyhow::Result<()> {
-        Ok(())
-    }
-
-    pub fn hard_reset(&mut self) -> anyhow::Result<()> {
-        Ok(())
-    }
-}
-
-impl<'a> Command for ResetCommand<'a> {
-    fn run(&mut self) -> anyhow::Result<()> {
-        let mut index = Index::new(self.repo.flux_dir.join("index"));
-        index.load()?;
-
-        let rel_path = if self.path.is_absolute() {
+    fn resolve_path(&self) -> anyhow::Result<PathBuf> {
+        if self.path.is_absolute() {
             let abs = self.path.canonicalize()?;
-            abs.strip_prefix(self.repo.work_tree.path())?.to_path_buf()
+            Ok(abs.strip_prefix(self.repo.work_tree.path())?.to_path_buf())
         } else {
-            self.path.clone()
-        };
+            Ok(self.path.clone())
+        }
+    }
 
+    pub fn soft_reset(&mut self, index: &Index, rel_path: &PathBuf) -> anyhow::Result<()> {
         let path_str = rel_path.to_string_lossy().to_string();
 
         let entry = index
@@ -57,13 +46,63 @@ impl<'a> Command for ResetCommand<'a> {
             .downcast_ref::<Blob>()
             .ok_or_else(|| anyhow::anyhow!("Object is not a blob"))?;
 
-        let data = blob.as_string();
+        self.repo.work_tree.write_file(
+            rel_path,
+            blob.as_string().as_bytes(),
+            Some(entry.mode),
+            true,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn hard_reset(&mut self, index: &mut Index, rel_path: &PathBuf) -> anyhow::Result<()> {
+        let head_commit = self.repo.refs.head_commit()?;
+        if head_commit.is_empty() {
+            anyhow::bail!("No commits yet — nothing to hard reset to");
+        }
+
+        let path_str = rel_path.to_string_lossy().to_string();
+
+        let db = Database::open(self.repo.flux_dir.clone());
+        let walker = Walker::new(&db);
+        let blob_hash = walker
+            .file_hash_from_commit(&path_str, &head_commit)?
+            .ok_or_else(|| anyhow::anyhow!("'{}' not found in HEAD commit", path_str))?;
+
+        let obj = db.read_object(&blob_hash)?;
+        let blob = obj
+            .as_any()
+            .downcast_ref::<Blob>()
+            .ok_or_else(|| anyhow::anyhow!("Object is not a blob"))?;
+
+        let mode = index.entries.get(&(path_str.clone(), 0)).map(|e| e.mode);
 
         self.repo
             .work_tree
-            .write_file(&rel_path, data.as_bytes(), Some(entry.mode), true)?;
+            .write_file(rel_path, blob.as_string().as_bytes(), mode, true)?;
+
+        let abs_path = self.repo.work_tree.path().join(rel_path);
+        let stat = std::fs::metadata(&abs_path)?;
+        index.add(path_str, blob_hash, stat)?;
+        index.write_updates()?;
 
         Ok(())
+    }
+}
+
+impl<'a> Command for ResetCommand<'a> {
+    fn run(&mut self) -> anyhow::Result<()> {
+        let mut index = Index::new(self.repo.flux_dir.join("index"));
+        index.load()?;
+
+        let rel_path = self.resolve_path()?;
+
+        if self.hard {
+            self.hard_reset(&mut index, &rel_path)
+        } else {
+            self.soft_reset(&index, &rel_path)
+        }
     }
 }
 
@@ -111,37 +150,6 @@ pub mod tests {
         Ok(())
     }
 
-    // #[test]
-    // fn reset_deleted_file() -> anyhow::Result<()> {
-    //     let dir = tempdir()?;
-    //     let repo_path = dir.path().to_string_lossy().to_string();
-
-    //     InitCommand::new(Some(repo_path.clone()), true).run()?;
-    //     let mut repo = Repository::open(Some(repo_path))?;
-
-    //     repo.set("user_name".to_string(), "test".to_string())?;
-    //     repo.set("user_email".to_string(), "test@test.com".to_string())?;
-
-    //     let file_path = dir.path().join("file.txt");
-    //     fs::write(&file_path, "original")?;
-
-    //     AddCommand {
-    //         repo: &mut repo,
-    //         path: PathBuf::from("."),
-    //     }
-    //     .run()?;
-    //     CommitCommand::new(&mut repo, "commit".to_string())?.run()?;
-
-    //     fs::remove_file(&file_path)?;
-    //     assert!(!file_path.exists());
-
-    //     ResetCommand::new(&mut repo, file_path.to_string_lossy().to_string()).run()?;
-
-    //     assert_eq!(fs::read_to_string(&file_path)?, "original");
-
-    //     Ok(())
-    // }
-
     #[test]
     fn soft_reset_untracked_file() -> anyhow::Result<()> {
         let dir = tempdir()?;
@@ -153,7 +161,8 @@ pub mod tests {
         let file_path = dir.path().join("untracked.txt");
         fs::write(&file_path, "data")?;
 
-        let result = ResetCommand::new(&mut repo, file_path.to_string_lossy().to_string(), false).run();
+        let result =
+            ResetCommand::new(&mut repo, file_path.to_string_lossy().to_string(), false).run();
 
         assert!(result.is_err());
 
@@ -225,6 +234,42 @@ pub mod tests {
 
         let mode = fs::metadata(&file_path)?.permissions().mode() & 0o777;
         assert_eq!(mode, 0o755);
+
+        Ok(())
+    }
+
+    #[test]
+    fn hard_reset() -> anyhow::Result<()> {
+        let dir = tempdir()?;
+        let repo_path_str = dir.path().to_string_lossy().to_string();
+        InitCommand::new(Some(repo_path_str.clone()), true).run()?;
+        let mut repo = Repository::open(Some(repo_path_str))?;
+
+        repo.set("user_name".to_string(), "test_user".to_string())?;
+        repo.set("user_email".to_string(), "test@email.com".to_string())?;
+
+        let initial_content = "fn main() {println!(\"Hello World\");}";
+        let file_path = dir.path().join("main.rs");
+        fs::write(&file_path, initial_content)?;
+
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("."),
+        }
+        .run()?;
+        CommitCommand::new(&mut repo, "Initial commit".to_string())?.run()?;
+
+        let staged_content = "fn main() {println!(\"staged\");}";
+        fs::write(&file_path, staged_content)?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("."),
+        }
+        .run()?;
+
+        assert_eq!(fs::read_to_string(&file_path)?, staged_content);
+        ResetCommand::new(&mut repo, file_path.to_string_lossy().to_string(), true).run()?;
+        assert_eq!(fs::read_to_string(&file_path)?, initial_content);
 
         Ok(())
     }

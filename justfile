@@ -38,7 +38,7 @@ deps:
     cargo update
     cargo outdated || true
 
-desktop-dev:
+desktop:
     cd crates/client/desktop-app && pnpm install
     cd crates/client/desktop-app && pnpm tauri dev
 

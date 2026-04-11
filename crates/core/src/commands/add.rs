@@ -11,6 +11,52 @@ pub struct AddCommand<'a> {
     pub path: PathBuf,
 }
 
+impl<'a> AddCommand<'a> {
+    pub fn new(repo: &'a mut Repository, path: PathBuf) -> Self {
+        Self { repo, path }
+    }
+
+    fn add_path(&self, path: &Path, index: &mut Index, db: &Database) -> anyhow::Result<()> {
+        if !path.exists() {
+            let relative_path = path
+                .strip_prefix(self.repo.work_tree.path())?
+                .to_str()
+                .unwrap()
+                .to_string();
+            index.rm(relative_path)?;
+            return Ok(());
+        }
+
+        if path.is_file() {
+            let data = self.repo.work_tree.read_file(path)?;
+            let blob = Blob::from_bytes(data);
+            let id = blob.id().clone();
+            db.store(Box::from(blob))?;
+
+            let relative_path = path
+                .strip_prefix(self.repo.work_tree.path())?
+                .to_str()
+                .unwrap()
+                .to_string();
+            let stat = path.metadata()?;
+            index.add(relative_path, id, stat)?;
+        } else if path.is_dir() {
+            if path.ends_with(".flux") {
+                return Ok(());
+            }
+            for entry in std::fs::read_dir(path)? {
+                let entry = entry?;
+                let child = entry.path();
+                if child.ends_with(".flux") {
+                    continue;
+                }
+                self.add_path(&child, index, db)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 impl<'a> Command for AddCommand<'a> {
     fn run(&mut self) -> anyhow::Result<()> {
         let full_path = self.repo.work_tree.path().join(&self.path);
@@ -43,38 +89,6 @@ impl<'a> Command for AddCommand<'a> {
         }
 
         index.write_updates()?;
-        Ok(())
-    }
-}
-
-impl<'a> AddCommand<'a> {
-    fn add_path(&self, path: &Path, index: &mut Index, db: &Database) -> anyhow::Result<()> {
-        if path.is_file() {
-            let data = self.repo.work_tree.read_file(path)?;
-            let blob = Blob::from_bytes(data);
-            let id = blob.id().clone();
-            db.store(Box::from(blob))?;
-
-            let relative_path = path
-                .strip_prefix(self.repo.work_tree.path())?
-                .to_str()
-                .unwrap()
-                .to_string();
-            let stat = path.metadata()?;
-            index.add(relative_path, id, stat)?;
-        } else if path.is_dir() {
-            if path.ends_with(".flux") {
-                return Ok(());
-            }
-            for entry in std::fs::read_dir(path)? {
-                let entry = entry?;
-                let child = entry.path();
-                if child.ends_with(".flux") {
-                    continue;
-                }
-                self.add_path(&child, index, db)?;
-            }
-        }
         Ok(())
     }
 }
