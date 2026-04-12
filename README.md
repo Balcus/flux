@@ -1,8 +1,9 @@
 <p align="center">
-  <img src="./assets/logo.png" alt="Flux Logo" width="250">
+  <img src="./assets/desktop_app.png" alt="Application Screenshot" width="500">
 </p>
 
 # Flux
+### Version Control Made Easy
 
 Flux is a distributed version control system designed to be as useful as git for small to medium projects, while providing a simpler and more intuitive API.
 
@@ -20,15 +21,19 @@ Additionally, the project includes a `justfile` containing the most common comma
 
 ### Porcelain
 
-* **`init`**
 * **`add`**
-* **`delete`**
-* **`commit`**
-* **`log`**
 * **`branch`**
-* **`push`**
 * **`clone`**
+* **`commit`**
+* **`delete`**
+* **`diff`**
+* **`init`**
+* **`log`**
+* **`push`**
+* **`reset`**
+* **`restore`**
 * **`set`**
+* **`status`**
 
 ---
 

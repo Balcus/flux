@@ -23,39 +23,70 @@ impl<'a> ResetCommand<'a> {
 
     fn resolve_path(&self) -> anyhow::Result<PathBuf> {
         if self.path.is_absolute() {
-            let abs = self.path.canonicalize()?;
-            Ok(abs.strip_prefix(self.repo.work_tree.path())?.to_path_buf())
+            let work_tree = self.repo.work_tree.path().canonicalize()?;
+            let canonical_self = if self.path.exists() {
+                self.path.canonicalize()?
+            } else {
+                let parent = self
+                    .path
+                    .parent()
+                    .ok_or_else(|| anyhow::anyhow!("Path has no parent"))?
+                    .canonicalize()?;
+                parent.join(
+                    self.path
+                        .file_name()
+                        .ok_or_else(|| anyhow::anyhow!("Path has no filename"))?,
+                )
+            };
+            Ok(canonical_self.strip_prefix(&work_tree)?.to_path_buf())
         } else {
             Ok(self.path.clone())
         }
     }
 
+    /// Reverts the contents of a file to the lastest staged version
     pub fn soft_reset(&mut self, index: &Index, rel_path: &PathBuf) -> anyhow::Result<()> {
         let path_str = rel_path.to_string_lossy().to_string();
 
-        let entry = index
-            .entries
-            .get(&(path_str.clone(), 0))
-            .ok_or_else(|| anyhow::anyhow!("File not found in index"))?;
-
         let db = Database::open(self.repo.flux_dir.clone());
-        let obj = db.read_object(&hex::encode(entry.id))?;
 
-        let blob = obj
-            .as_any()
-            .downcast_ref::<Blob>()
-            .ok_or_else(|| anyhow::anyhow!("Object is not a blob"))?;
+        let data;
+        let mode;
 
-        self.repo.work_tree.write_file(
-            rel_path,
-            blob.as_string().as_bytes(),
-            Some(entry.mode),
-            true,
-        )?;
+        if let Some(entry) = index.entries.get(&(path_str.clone(), 0)) {
+            let obj = db.read_object(&hex::encode(entry.id))?;
+            let blob = obj
+                .as_any()
+                .downcast_ref::<Blob>()
+                .ok_or_else(|| anyhow::anyhow!("Object is not a blob"))?;
+            data = blob.as_string();
+            mode = Some(entry.mode);
+        } else {
+            let head_commit = self.repo.refs.head_commit()?;
+            if head_commit.is_empty() {
+                anyhow::bail!("File not found in index and no commits exist");
+            }
+            let walker = Walker::new(&db);
+            let blob_hash = walker
+                .file_hash_from_commit(&path_str, &head_commit)?
+                .ok_or_else(|| anyhow::anyhow!("'{}' not found in index or HEAD", path_str))?;
+            let obj = db.read_object(&blob_hash)?;
+            let blob = obj
+                .as_any()
+                .downcast_ref::<Blob>()
+                .ok_or_else(|| anyhow::anyhow!("Object is not a blob"))?;
+            data = blob.as_string();
+            mode = None;
+        }
+
+        self.repo
+            .work_tree
+            .write_file(rel_path, data.as_bytes(), mode, true)?;
 
         Ok(())
     }
 
+    /// Discards all changes made to a file and resets it to the last commit's version
     pub fn hard_reset(&mut self, index: &mut Index, rel_path: &PathBuf) -> anyhow::Result<()> {
         let head_commit = self.repo.refs.head_commit()?;
         if head_commit.is_empty() {
@@ -270,6 +301,108 @@ pub mod tests {
         assert_eq!(fs::read_to_string(&file_path)?, staged_content);
         ResetCommand::new(&mut repo, file_path.to_string_lossy().to_string(), true).run()?;
         assert_eq!(fs::read_to_string(&file_path)?, initial_content);
+
+        Ok(())
+    }
+
+    #[test]
+    fn soft_reset_deleted_file() -> anyhow::Result<()> {
+        let dir = tempdir()?;
+        let repo_path_str = dir.path().to_string_lossy().to_string();
+        InitCommand::new(Some(repo_path_str.clone()), true).run()?;
+        let mut repo = Repository::open(Some(repo_path_str))?;
+
+        repo.set("user_name".to_string(), "test_user".to_string())?;
+        repo.set("user_email".to_string(), "test@email.com".to_string())?;
+
+        let content = "fn main() {}";
+        let file_path = dir.path().join("main.rs");
+        fs::write(&file_path, content)?;
+
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("."),
+        }
+        .run()?;
+        CommitCommand::new(&mut repo, "Initial commit".to_string())?.run()?;
+
+        fs::remove_file(&file_path)?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("."),
+        }
+        .run()?;
+
+        assert!(!file_path.exists());
+        ResetCommand::new(&mut repo, file_path.to_string_lossy().to_string(), false).run()?;
+        assert_eq!(fs::read_to_string(&file_path)?, content);
+
+        Ok(())
+    }
+
+    #[test]
+    fn hard_reset_deleted_file() -> anyhow::Result<()> {
+        let dir = tempdir()?;
+        let repo_path_str = dir.path().to_string_lossy().to_string();
+        InitCommand::new(Some(repo_path_str.clone()), true).run()?;
+        let mut repo = Repository::open(Some(repo_path_str))?;
+
+        repo.set("user_name".to_string(), "test_user".to_string())?;
+        repo.set("user_email".to_string(), "test@email.com".to_string())?;
+
+        let content = "fn main() {}";
+        let file_path = dir.path().join("main.rs");
+        fs::write(&file_path, content)?;
+
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("."),
+        }
+        .run()?;
+        CommitCommand::new(&mut repo, "Initial commit".to_string())?.run()?;
+
+        fs::remove_file(&file_path)?;
+
+        assert!(!file_path.exists());
+        ResetCommand::new(&mut repo, file_path.to_string_lossy().to_string(), true).run()?;
+        assert!(file_path.exists());
+        assert_eq!(fs::read_to_string(&file_path)?, content);
+
+        Ok(())
+    }
+
+    #[test]
+    fn hard_reset_staged_deletion() -> anyhow::Result<()> {
+        let dir = tempdir()?;
+        let repo_path_str = dir.path().to_string_lossy().to_string();
+        InitCommand::new(Some(repo_path_str.clone()), true).run()?;
+        let mut repo = Repository::open(Some(repo_path_str))?;
+
+        repo.set("user_name".to_string(), "test_user".to_string())?;
+        repo.set("user_email".to_string(), "test@email.com".to_string())?;
+
+        let content = "fn main() {}";
+        let file_path = dir.path().join("main.rs");
+        fs::write(&file_path, content)?;
+
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("."),
+        }
+        .run()?;
+        CommitCommand::new(&mut repo, "Initial commit".to_string())?.run()?;
+
+        fs::remove_file(&file_path)?;
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("."),
+        }
+        .run()?;
+
+        assert!(!file_path.exists());
+        ResetCommand::new(&mut repo, file_path.to_string_lossy().to_string(), true).run()?;
+        assert!(file_path.exists());
+        assert_eq!(fs::read_to_string(&file_path)?, content);
 
         Ok(())
     }

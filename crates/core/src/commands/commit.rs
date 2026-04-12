@@ -179,8 +179,12 @@ pub mod tests {
             dir.path().join("main.rs"),
             "fn main() {println!(\"Hello World\");}",
         )?;
-        
-        AddCommand { repo: &mut repo, path: PathBuf::from(".") }.run()?;
+
+        AddCommand {
+            repo: &mut repo,
+            path: PathBuf::from("."),
+        }
+        .run()?;
 
         let res = repo.commit("Initial commit".to_string());
         let err = res.unwrap_err();

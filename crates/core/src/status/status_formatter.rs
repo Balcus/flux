@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{
-    status::{change_type::ChangeType, status_impl::Status}, utils::colors::{GREEN, RED, RESET, YELLOW}
+    status::{change_type::ChangeType, status_impl::Status},
+    utils::colors::{GREEN, RED, RESET, YELLOW},
 };
 
 pub struct StatusFormatter<'a> {

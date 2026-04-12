@@ -141,10 +141,7 @@ impl Repository {
 
         let db = Database::open(self.flux_dir.clone());
 
-        let tree_hash = self
-            .work_tree
-            .build_tree_from_index(&index, &db)
-            .unwrap();
+        let tree_hash = self.work_tree.build_tree_from_index(&index, &db).unwrap();
 
         let credentials = self
             .config

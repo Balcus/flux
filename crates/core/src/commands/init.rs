@@ -1,5 +1,7 @@
 use crate::{
-    commands::command::Command, dircache::index::Index, internals::{config::Config, refs::Refs, work_tree::WorkTree}
+    commands::command::Command,
+    dircache::index::Index,
+    internals::{config::Config, refs::Refs, work_tree::WorkTree},
 };
 use std::{fs, path::PathBuf};
 

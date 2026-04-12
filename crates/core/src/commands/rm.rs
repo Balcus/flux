@@ -1,4 +1,6 @@
-use crate::{commands::command::Command, dircache::index::Index, internals::repository::Repository};
+use crate::{
+    commands::command::Command, dircache::index::Index, internals::repository::Repository,
+};
 
 pub struct RmCommand<'a> {
     pub repo: &'a mut Repository,

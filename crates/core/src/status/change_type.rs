@@ -5,7 +5,7 @@ pub enum ChangeType {
     Deleted,
 }
 
-impl  ChangeType {
+impl ChangeType {
     pub fn to_string(&self) -> String {
         match self {
             Self::Added => "Added".to_string(),

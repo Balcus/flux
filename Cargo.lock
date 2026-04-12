@@ -951,6 +951,7 @@ name = "desktop-app"
 version = "0.1.0"
 dependencies = [
  "flux-core",
+ "hex",
  "serde",
  "serde_json",
  "tauri",

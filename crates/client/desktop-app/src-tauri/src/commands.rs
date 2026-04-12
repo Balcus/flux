@@ -1,14 +1,17 @@
-use std::path::PathBuf;
 use crate::models::{
     app_state::AppState, branch_info::BranchInfo, commit_info::CommitInfo,
     repository_info::RepositoryInfo,
 };
 use flux_core::{
-    commands::{add::AddCommand, command::Command, reset::ResetCommand, rm::RmCommand},
+    commands::{
+        add::AddCommand, command::Command, reset::ResetCommand, restore::RestoreCommand,
+        rm::RmCommand,
+    },
     database::{commit::Commit, database::Database},
     error::{ConfigError, RefsError},
     internals::repository::Repository,
 };
+use std::path::PathBuf;
 use tauri::State;
 
 #[tauri::command]
@@ -186,16 +189,13 @@ pub fn rm(path: String, state: State<AppState>) -> Result<(), String> {
     let repo = repo_lock
         .as_mut()
         .ok_or_else(|| "No repository open".to_string())?;
-    let mut cmd = RmCommand {
-        repo,
-        path
-    };
+    let mut cmd = RmCommand { repo, path };
 
     cmd.run().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn reset_soft(path:String, state: State<AppState>) -> Result<(), String> {
+pub fn reset_soft(path: String, state: State<AppState>) -> Result<(), String> {
     let mut repo_lock = state.repository.lock().unwrap();
     let repo = repo_lock
         .as_mut()
@@ -205,11 +205,70 @@ pub fn reset_soft(path:String, state: State<AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn reset_hard(path:String, state: State<AppState>) -> Result<(), String> {
+pub fn reset_hard(path: String, state: State<AppState>) -> Result<(), String> {
     let mut repo_lock = state.repository.lock().unwrap();
     let repo = repo_lock
         .as_mut()
         .ok_or_else(|| "No repository open".to_string())?;
     let mut cmd = ResetCommand::new(repo, path, true);
     cmd.run().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn restore(path: String, state: State<AppState>) -> Result<(), String> {
+    let mut repo_lock = state.repository.lock().unwrap();
+    let repo = repo_lock
+        .as_mut()
+        .ok_or_else(|| "No repository open".to_string())?;
+    let mut cmd = RestoreCommand::new(repo, path);
+    cmd.run().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_diff(path: String, state: State<AppState>) -> Result<String, String> {
+    let repo_lock = state.repository.lock().unwrap();
+    let repo = repo_lock
+        .as_ref()
+        .ok_or_else(|| "No repository open".to_string())?;
+
+    let workspace_path = repo.work_tree.path().join(&path);
+    let workspace_data = std::fs::read_to_string(&workspace_path).unwrap_or_default();
+
+    let mut index = flux_core::dircache::index::Index::new(repo.flux_dir.join("index"));
+    index.load().map_err(|e| e.to_string())?;
+
+    let index_data = match index.entries.get(&(path.clone(), 0)) {
+        Some(entry) => {
+            let db = Database::open(repo.flux_dir.clone());
+            let blob = db
+                .read_object(&hex::encode(entry.id))
+                .map_err(|e| e.to_string())?;
+            String::from_utf8(blob.content()).unwrap_or_default()
+        }
+        None => String::new(),
+    };
+
+    let hunks = flux_core::diff::diff_impl::Mayers::diff_hunks(&index_data, &workspace_data);
+
+    if hunks.is_empty() {
+        return Ok(String::new());
+    }
+
+    let mut out = String::new();
+    for hunk in &hunks {
+        out.push_str(&hunk.header());
+        out.push('\n');
+        for edit in &hunk.edits {
+            use flux_core::diff::edit::EditType;
+            let line = edit.a_line.as_ref().or(edit.b_line.as_ref()).unwrap();
+            let prefix = match edit.edit_type {
+                EditType::Insertion => "+",
+                EditType::Deletion => "-",
+                EditType::Equal => " ",
+            };
+            out.push_str(&format!("{} {}\n", prefix, line.text));
+        }
+    }
+
+    Ok(out)
 }

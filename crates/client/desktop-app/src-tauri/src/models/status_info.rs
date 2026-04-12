@@ -1,5 +1,5 @@
-use serde::Serialize;
 use crate::models::stage_file::StagedFile;
+use serde::Serialize;
 
 #[derive(Serialize)]
 pub struct StatusInfo {

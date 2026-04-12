@@ -3,7 +3,8 @@ use crate::{
     database::database::Database,
     diff::diff_impl::Mayers,
     dircache::index::Index,
-    internals::repository::Repository, status::{change_type::ChangeType, status_impl::Status},
+    internals::repository::Repository,
+    status::{change_type::ChangeType, status_impl::Status},
 };
 use anyhow::Result;
 use std::fs;
