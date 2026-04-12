@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="./assets/desktop_app.png" alt="Application Screenshot" width="500">
-</p>
+<img src="./assets/desktop_app.png" alt="Application Screenshot">
 
 # Flux
 ### Version Control Made Easy
