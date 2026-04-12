@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use flux_core::{
     commands::{
         add::AddCommand, command::Command, commit::CommitCommand, diff::DiffCommand,
-        hash_object::HashObject, init::InitCommand, reset::ResetCommand, rm::RmCommand,
-        status::StatusCommand,
+        hash_object::HashObject, init::InitCommand, reset::ResetCommand, restore::RestoreCommand,
+        rm::RmCommand, status::StatusCommand,
     },
     internals::repository::Repository,
 };
@@ -133,5 +133,11 @@ pub fn reset(repo_path: Option<String>, path: String, hard: bool) -> anyhow::Res
 pub fn rm(repo_path: Option<String>, path: String) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
     RmCommand::new(&mut repository, path);
+    Ok(())
+}
+
+pub fn restore(repo_path: Option<String>, path: String) -> anyhow::Result<()> {
+    let mut repository = Repository::open(repo_path)?;
+    RestoreCommand::new(&mut repository, path).run()?;
     Ok(())
 }

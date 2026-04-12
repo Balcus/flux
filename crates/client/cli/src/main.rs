@@ -75,7 +75,10 @@ async fn main() -> anyhow::Result<()> {
         }
         Commands::Reset { path, hard } => {
             commands::reset(repo_path, path, hard)?;
-        },
+        }
+        Commands::Restore { path } => {
+            commands::restore(repo_path, path)?;
+        }
     }
 
     Ok(())

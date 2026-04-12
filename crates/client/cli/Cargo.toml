@@ -8,7 +8,7 @@ name = "flux"
 path = "src/main.rs"
 
 [dependencies]
-flux-core = { path = "../core" }
+flux-core = { path = "../../core" }
 clap = { version = "4.5.53", features = ["derive"] }
 anyhow = "1.0.100"
 tokio = "1.49.0"

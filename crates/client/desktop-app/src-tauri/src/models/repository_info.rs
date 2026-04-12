@@ -1,7 +1,4 @@
-use crate::models::{
-    branch_info::BranchInfo,
-    status_info::{StagedFile, StatusInfo},
-};
+use crate::models::{branch_info::BranchInfo, stage_file::StagedFile, status_info::StatusInfo};
 use flux_core::{
     error::ConfigError, internals::repository::Repository, status::status_impl::Status,
 };
@@ -50,7 +47,7 @@ impl RepositoryInfo {
 
         let status = Status::new(repo).map_err(|e| e.to_string())?;
 
-        let staged: Vec<StagedFile> = status
+        let mut staged: Vec<StagedFile> = status
             .index_changes
             .iter()
             .map(|(path, change)| StagedFile {
@@ -59,7 +56,9 @@ impl RepositoryInfo {
             })
             .collect();
 
-        let unstaged: Vec<StagedFile> = status
+        staged.sort();
+
+        let mut unstaged: Vec<StagedFile> = status
             .workspace_changes
             .iter()
             .map(|(path, change)| StagedFile {
@@ -67,6 +66,8 @@ impl RepositoryInfo {
                 change_type: change.to_string(),
             })
             .collect();
+
+        unstaged.sort();
 
         Ok(Self {
             path: repo.work_tree.path().to_string_lossy().to_string(),

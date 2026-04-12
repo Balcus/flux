@@ -1,8 +1,8 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::sync::Mutex;
 use desktop_app_lib::{commands, models::app_state::AppState};
+use std::sync::Mutex;
 
 fn main() {
     tauri::Builder::default()
@@ -22,7 +22,9 @@ fn main() {
             commands::add,
             commands::rm,
             commands::reset_soft,
-            commands::reset_hard
+            commands::reset_hard,
+            commands::restore,
+            commands::get_diff
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

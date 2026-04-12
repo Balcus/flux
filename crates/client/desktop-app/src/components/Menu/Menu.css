@@ -60,13 +60,13 @@
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--menu-parent-color);
+  color: var(--flux-blue);
 }
 
 .menu-button.child {
   padding-left: 32px;
   font-weight: 400;
-  color: var(--menu-child-color);
+  color: var(--subtitle-color);
 }
 
 .toggle-icon {
