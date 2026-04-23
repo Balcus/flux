@@ -1,7 +1,14 @@
 import "../../../App.css";
 import "./FileRow.css";
 
-export default function FileRow({ path, type, selected, onSelect, onAction, actionLabel }: {
+export default function FileRow({
+  path,
+  type,
+  selected,
+  onSelect,
+  onAction,
+  actionLabel,
+}: {
   path: string;
   type?: string;
   selected: boolean;
@@ -16,15 +23,19 @@ export default function FileRow({ path, type, selected, onSelect, onAction, acti
     t === "Added" ? "A" : t === "Deleted" ? "D" : "M";
 
   return (
-    <div
-      className={`file-row${selected ? " active" : ""}`}
-      onClick={onSelect}
-    >
-      <span className={`file-row-badge ${type ? badgeClass(type) : "badge-add"}`}>
+    <div className={`file-row${selected ? " active" : ""}`} onClick={onSelect}>
+      <span
+        className={`file-row-badge ${type ? badgeClass(type) : "badge-add"}`}
+      >
         {type ? badgeLabel(type) : "A"}
       </span>
       <span className="file-row-name">{path}</span>
-      <button onClick={e => { e.stopPropagation(); onAction(); }}>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onAction();
+        }}
+      >
         {actionLabel}
       </button>
     </div>

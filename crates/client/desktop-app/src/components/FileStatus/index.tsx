@@ -4,9 +4,10 @@ import ActionBar from "../ActionBar";
 import { useRepository } from "../../context/RepositoryContext";
 import { StagedFile } from "../../models/StagedFile";
 import FileRow from "./FileRow";
+import Diff from "./Diff";
+
 import "../../App.css";
 import "./FileStatus.css";
-import Diff from "./Diff";
 
 export default function FileStatus() {
   const { repository, refreshRepository } = useRepository();
@@ -28,19 +29,24 @@ export default function FileStatus() {
   };
 
   const handleStageAll = async () => {
-    for (const f of repository?.status.unstaged ?? []) await invoke("add", { path: f.path });
-    for (const f of repository?.status.untracked ?? []) await invoke("add", { path: f });
+    for (const f of repository?.status.unstaged ?? [])
+      await invoke("add", { path: f.path });
+    for (const f of repository?.status.untracked ?? [])
+      await invoke("add", { path: f });
     await refreshRepository();
   };
 
   const handleUnstageAll = async () => {
-    for (const f of repository?.status.staged ?? []) await invoke("restore", { path: f.path });
+    for (const f of repository?.status.staged ?? [])
+      await invoke("restore", { path: f.path });
     await refreshRepository();
   };
 
   return (
     <div className="file-status-root">
-      <div className="action-bar"><ActionBar /></div>
+      <div className="action-bar">
+        <ActionBar />
+      </div>
 
       <div className="fs-sidebar">
         <div className="fs-section">
