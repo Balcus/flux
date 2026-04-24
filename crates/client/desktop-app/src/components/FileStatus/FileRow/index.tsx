@@ -1,5 +1,12 @@
-import "../../../App.css";
+import { AddedIcon, ChangedIcon, DeletedIcon } from "../../../assets/icons";
+import { ChangeType } from "../../../models/ChangeType";
 import "./FileRow.css";
+
+const ICON_SRC: Record<ChangeType, string> = {
+  Added: AddedIcon,
+  Modified: ChangedIcon,
+  Deleted: DeletedIcon,
+};
 
 export default function FileRow({
   path,
@@ -10,27 +17,26 @@ export default function FileRow({
   actionLabel,
 }: {
   path: string;
-  type?: string;
+  type?: ChangeType;
   selected: boolean;
   onSelect: () => void;
   onAction: () => void;
   actionLabel: string;
 }) {
-  const badgeClass = (t: string) =>
-    t === "Added" ? "badge-add" : t === "Deleted" ? "badge-del" : "badge-mod";
-
-  const badgeLabel = (t: string) =>
-    t === "Added" ? "A" : t === "Deleted" ? "D" : "M";
+  const resolvedType: ChangeType = type ?? "Added";
+  const iconClass = `file-row-icon ${resolvedType.toLowerCase()}${selected ? " icon-selected" : ""}`;
 
   return (
     <div className={`file-row${selected ? " active" : ""}`} onClick={onSelect}>
-      <span
-        className={`file-row-badge ${type ? badgeClass(type) : "badge-add"}`}
-      >
-        {type ? badgeLabel(type) : "A"}
-      </span>
+      <img
+        src={ICON_SRC[resolvedType]}
+        width={14}
+        height={14}
+        className={iconClass}
+      />
       <span className="file-row-name">{path}</span>
       <button
+        className="file-row-action"
         onClick={(e) => {
           e.stopPropagation();
           onAction();

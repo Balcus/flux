@@ -4,9 +4,7 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.4); 
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -14,12 +12,13 @@
 }
 
 .popup-content {
-  background: var(--app-bg);
+  background: var(--color-bg-main);
   padding: 2rem;
-  border-radius: 12px;
+  border-radius: 8px;
   position: relative;
   min-width: 350px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
 .close-btn {
@@ -28,13 +27,11 @@
   right: 12px;
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: 1.2rem;
   cursor: pointer;
-  line-height: 1;
-  color: var(--flux-blue);
-  transition: color 0.2s ease;
+  color: var(--color-text-muted);
 }
 
 .close-btn:hover {
-  color: var(--bright-red);
+  color: var(--color-error);
 }

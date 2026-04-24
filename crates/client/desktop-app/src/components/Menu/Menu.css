@@ -1,103 +1,76 @@
-.sidebar-menu {
-  width: 250px;
+.sidebar {
+  width: 220px;
   height: 100vh;
-  background-color: var(--app-bg);
-  border-right: 1px solid var(--border-color);
+  background: var(--color-bg-secondary);
+  border-right: 1px solid var(--color-border);
   font-family: var(--font-family);
   font-size: 13px;
+  overflow-y: auto;
+  box-shadow: px 0 6px rgba(0, 0, 0, 0.06);
+  position: relative;
+  z-index: 1;
 }
 
 .sidebar-header {
-  padding: 16px;
-  border-bottom: 1px solid var(--border-color);
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 8px;
 }
 
-.app-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--flux-blue);
-}
-
-.app-subtitle {
-  font-size: 12px;
-  margin-top: 2px;
-  color: var(--subtitle-color);
-}
-
-.menu-list {
-  list-style: none;
-  margin-top: 1rem;
-  padding: 8px 0;
-}
-
-.menu-item {
-  margin-bottom: 12px;
-}
-
-.menu-child-item {
+.sidebar-header h1 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-primary);
   margin: 0;
 }
 
-.menu-button {
+.sidebar-header p {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin: 2px 0 0 0;
+}
+
+.sidebar nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0.4rem;
+  li {
+    margin: 0.1rem;
+  }
+}
+
+.sidebar nav li button {
   display: flex;
   align-items: center;
-  width: 80%;
-  padding: 6px 12px;
+  width: 100%;
+  padding: 5px 12px;
   border: none;
   background: none;
   cursor: pointer;
   text-align: left;
-  transition: background-color 0.15s;
+  color: var(--color-text-main);
+  font-size: 13px;
 }
 
-.menu-button:hover {
-  background-color: var(--hover-bg);
-  border-radius: 8px;
+.sidebar nav li button:hover {
+  background: var(--color-bg-main);
 }
 
-.menu-button.parent {
-  font-weight: 600;
+.sidebar nav li button.section-header {
   font-size: 12px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--flux-blue);
+  letter-spacing: 0.6px;
+  color: var(--color-text-muted);
+  padding-top: 12px;
 }
 
-.menu-button.child {
-  padding-left: 32px;
-  font-weight: 400;
-  color: var(--subtitle-color);
-}
-
-.toggle-icon {
-  width: 14px;
-  margin-right: 6px;
-  font-size: 10px;
-  color: var(--toggle-color);
-  display: flex;
-  align-items: center;
-}
-
-.icon {
-  width: 16px;
-  height: 16px;
-  margin-right: 8px;
-  opacity: var(--icon-opacity);
-}
-
-.label {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.submenu {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.current-branch {
+.sidebar nav li button.active,
+.sidebar nav li button.bold {
   font-weight: 600;
+  color: var(--color-text-main);
+}
+
+.sidebar nav li.child button {
+  padding-left: 28px;
 }

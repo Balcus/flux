@@ -2,9 +2,12 @@ import { Outlet } from "react-router-dom";
 import Menu from "./components/Menu";
 import { useRepository } from "./context/RepositoryContext";
 import OpenRepository from "./components/OpenRepository";
-import "./App.css";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+
+import "./App.css";
+import "./styles/variables.css";
+import "./styles/layout.css";
 
 function App() {
   const { repository } = useRepository();

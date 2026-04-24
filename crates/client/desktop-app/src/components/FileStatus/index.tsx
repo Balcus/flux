@@ -5,8 +5,6 @@ import { useRepository } from "../../context/RepositoryContext";
 import { StagedFile } from "../../models/StagedFile";
 import FileRow from "./FileRow";
 import Diff from "./Diff";
-
-import "../../App.css";
 import "./FileStatus.css";
 
 export default function FileStatus() {
@@ -43,18 +41,15 @@ export default function FileStatus() {
   };
 
   return (
-    <div className="file-status-root">
-      <div className="action-bar">
-        <ActionBar />
-      </div>
-
+    <div className="fs-root">
+      <ActionBar />
       <div className="fs-sidebar">
-        <div className="fs-section">
-          <div className="fs-section-header">
-            <h1>staged</h1>
-            <button onClick={handleUnstageAll}>↓ Unstage All</button>
-          </div>
-          <div className="fs-file-list">
+        <div className="fs-section staged">
+          <header>
+            <span>Staged</span>
+            <button onClick={handleUnstageAll}>Unstage all</button>
+          </header>
+          <ul>
             {repository?.status.staged.map((item: StagedFile) => (
               <FileRow
                 key={item.path}
@@ -63,18 +58,17 @@ export default function FileStatus() {
                 selected={selectedFile === item.path}
                 onSelect={() => setSelectedFile(item.path)}
                 onAction={() => handleUnstage(item.path)}
-                actionLabel="↓"
+                actionLabel="-"
               />
             ))}
-          </div>
+          </ul>
         </div>
-
         <div className="fs-section">
-          <div className="fs-section-header">
-            <h1>unstaged</h1>
-            <button onClick={handleStageAll}>↑ Stage All</button>
-          </div>
-          <div className="fs-file-list">
+          <header>
+            <span>Unstaged</span>
+            <button onClick={handleStageAll}>Stage all</button>
+          </header>
+          <ul>
             {repository?.status.unstaged.map((item: StagedFile) => (
               <FileRow
                 key={item.path}
@@ -83,7 +77,7 @@ export default function FileStatus() {
                 selected={selectedFile === item.path}
                 onSelect={() => setSelectedFile(item.path)}
                 onAction={() => handleStage(item.path)}
-                actionLabel="↑"
+                actionLabel="+"
               />
             ))}
             {repository?.status.untracked.map((path: string) => (
@@ -93,16 +87,13 @@ export default function FileStatus() {
                 selected={selectedFile === path}
                 onSelect={() => setSelectedFile(path)}
                 onAction={() => handleStage(path)}
-                actionLabel="↑"
+                actionLabel="+"
               />
             ))}
-          </div>
+          </ul>
         </div>
       </div>
-
-      <div className="fs-diff-pane">
-        <Diff path={selectedFile} />
-      </div>
+      <Diff path={selectedFile} />
     </div>
   );
 }

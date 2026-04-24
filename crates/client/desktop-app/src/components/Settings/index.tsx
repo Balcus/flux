@@ -1,8 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
-import "./Settings.css";
 import { useRepository } from "../../context/RepositoryContext";
 import { toast } from "react-toastify";
+
+import "./Settings.css";
 
 export default function Settings() {
   const { repository, refreshRepository } = useRepository();
@@ -24,23 +25,28 @@ export default function Settings() {
     setIsSaving(true);
 
     try {
-      await invoke("update_user_config", { userName: username, userEmail: email });
+      await invoke("update_user_config", {
+        userName: username,
+        userEmail: email,
+      });
       await invoke("update_origin", { origin });
       await refreshRepository();
-      
+
       toast.success("Settings saved successfully!");
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);
-      
+
       toast.error(
         <div>
-          <div style={{ fontWeight: '700', fontSize: '14px', marginBottom: '2px' }}>
+          <div
+            style={{ fontWeight: "700", fontSize: "14px", marginBottom: "2px" }}
+          >
             Failed to save settings
           </div>
-          <div style={{ fontSize: '12px', opacity: 0.8, lineHeight: '1.4' }}>
+          <div style={{ fontSize: "12px", opacity: 0.8, lineHeight: "1.4" }}>
             {error}
           </div>
-        </div>
+        </div>,
       );
     } finally {
       setIsSaving(false);
@@ -67,7 +73,8 @@ export default function Settings() {
               placeholder="Enter your username"
             />
             <p className="description">
-              This name will be used when creating commitsand authenticating with the reomote server.
+              This name will be used when creating commits and authenticating
+              with the reomote server.
             </p>
           </div>
           <div className="setting-item">
@@ -79,7 +86,8 @@ export default function Settings() {
               placeholder="Enter your email"
             />
             <p className="description">
-              This email will be used when creating commits and authenticating with the reomote server.
+              This email will be used when creating commits and authenticating
+              with the reomote server.
             </p>
           </div>
         </section>
@@ -100,7 +108,11 @@ export default function Settings() {
           </div>
         </section>
 
-        <button className="save-button" onClick={handleSave} disabled={isSaving}>
+        <button
+          className="save-button"
+          onClick={handleSave}
+          disabled={isSaving}
+        >
           {isSaving ? "Saving..." : "Apply Changes"}
         </button>
       </div>

@@ -7,7 +7,6 @@ import { BrowseIcon, CloneIcon, OpenIcon } from "../../assets/icons";
 import Popup from "../Shared/Popup";
 
 import "./OpenRepository.css";
-import "../../App.css";
 
 export default function OpenRepository() {
   const { openRepository, isLoading, error } = useRepository();
@@ -44,27 +43,19 @@ export default function OpenRepository() {
 
   return (
     <div
-      className={`container ${openClonePopup ? "blurred" : ""}`}
+      className={`open-root${openClonePopup ? " dimmed" : ""}`}
       style={{ backgroundImage: `url(${OpenRepositoryBg})` }}
     >
-      <div className="main-content">
-        <h1 className="title">flux</h1>
-        <p className="description">Distributed Version Control made Easy</p>
-        <div className="repo-controls">
-          <button
-            className="repo-control-button"
-            onClick={openRepository}
-            disabled={isLoading}
-          >
-            <img className="icon" src={OpenIcon} alt="" />
+      <div>
+        <h1>flux</h1>
+        <p>Distributed Version Control made Easy</p>
+        <div className="open-controls">
+          <button onClick={openRepository} disabled={isLoading}>
+            <img src={OpenIcon} alt="" />
             <span>Open</span>
           </button>
-          <button
-            className="repo-control-button"
-            onClick={() => setOpenClonePopup(true)}
-            disabled={isLoading}
-          >
-            <img className="icon" src={CloneIcon} alt="" />
+          <button onClick={() => setOpenClonePopup(true)} disabled={isLoading}>
+            <img src={CloneIcon} alt="" />
             <span>Clone</span>
           </button>
         </div>
@@ -74,23 +65,25 @@ export default function OpenRepository() {
         showPopUp={openClonePopup}
         closePopUp={() => setOpenClonePopup(false)}
       >
-        <div className="clone-content">
+        <div className="clone-popup">
           <h2>Clone Repository</h2>
-
-          <label className="input-label">Destination Folder</label>
-          <div className="path-input-container">
+          <label>Destination Folder</label>
+          <div className="path-row">
             <input
               type="text"
               placeholder="/users/desktop/my-repo"
               value={destPath}
               readOnly
             />
-            <button className="btn-browse-icon" onClick={handleSelectPath}>
-              <img className="icon-small" src={BrowseIcon} alt="Browse" />
+            <button onClick={handleSelectPath}>
+              <img
+                src={BrowseIcon}
+                alt="Browse"
+                style={{ width: 22, height: 22 }}
+              />
             </button>
           </div>
-
-          <label className="input-label">Repository URL</label>
+          <label>Repository URL</label>
           <input
             type="text"
             placeholder="Remote repository url"
@@ -98,24 +91,16 @@ export default function OpenRepository() {
             onChange={(e) => setRepoUrl(e.target.value)}
             autoFocus
           />
-
-          <div className="clone-actions">
+          <footer>
+            <button onClick={() => setOpenClonePopup(false)}>Cancel</button>
             <button
-              className="btn-secondary"
-              onClick={() => setOpenClonePopup(false)}
-            >
-              Cancel
-            </button>
-            <button
-              className="btn-primary"
+              className="primary"
               disabled={!repoUrl || !destPath}
-              onClick={() => {
-                setOpenClonePopup(false);
-              }}
+              onClick={() => setOpenClonePopup(false)}
             >
               Clone
             </button>
-          </div>
+          </footer>
         </div>
       </Popup>
     </div>

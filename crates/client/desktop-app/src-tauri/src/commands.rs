@@ -4,8 +4,8 @@ use crate::models::{
 };
 use flux_core::{
     commands::{
-        add::AddCommand, command::Command, reset::ResetCommand, restore::RestoreCommand,
-        rm::RmCommand,
+        add::AddCommand, command::Command, commit::CommitCommand, reset::ResetCommand,
+        restore::RestoreCommand, rm::RmCommand,
     },
     database::{commit::Commit, database::Database},
     error::{ConfigError, RefsError},
@@ -271,4 +271,17 @@ pub fn get_diff(path: String, state: State<AppState>) -> Result<String, String> 
     }
 
     Ok(out)
+}
+
+#[tauri::command]
+pub fn commit(message: String, state: State<AppState>) -> Result<(), String> {
+    let mut repo_lock = state.repository.lock().unwrap();
+    let mut repo = repo_lock
+        .as_mut()
+        .ok_or_else(|| "No repository open".to_string())?;
+
+    CommitCommand::new(&mut repo, message)
+        .map_err(|e| e.to_string())?
+        .run()
+        .map_err(|e| e.to_string())
 }

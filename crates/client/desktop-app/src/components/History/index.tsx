@@ -3,7 +3,6 @@ import { Commit } from "../../models/Commit";
 import { invoke } from "@tauri-apps/api/core";
 import { Gitgraph, Orientation } from "@gitgraph/react";
 
-import "../../App.css";
 import "./History.css";
 
 export default function History() {
