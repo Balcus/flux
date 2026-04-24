@@ -5,6 +5,7 @@ import { useRepository } from "../../context/RepositoryContext";
 import { StagedFile } from "../../models/StagedFile";
 import FileRow from "./FileRow";
 import Diff from "./Diff";
+
 import "./FileStatus.css";
 
 export default function FileStatus() {
