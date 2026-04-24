@@ -3,7 +3,7 @@
   --diff-add-color: #1a7a35;
   --diff-del-bg: rgba(255, 59, 48, 0.08);
   --diff-del-color: #cc1a10;
-  --diff-meta-color: rgba(168, 151, 0, 0.949);
+  --diff-meta-color: #a89700;
 }
 
 .diff-pane {
@@ -11,71 +11,51 @@
   flex-direction: column;
   overflow: hidden;
   height: 100%;
+  font-family: var(--font-family);
 }
 
-.diff-header {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border-color);
+.diff-pane header {
+  padding: 7.5px 12px;
+  border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
-.diff-header h1 {
+.diff-pane header h1 {
   font-size: 12px;
   font-weight: 500;
-  color: var(--subtitle-color);
+  color: var(--color-text-main);
+  margin: 0;
 }
 
-.diff-body {
+.diff-pane > div {
   flex: 1;
   overflow-y: auto;
-}
-
-.diff-content {
-  font-size: 12px;
-  line-height: 1.6;
-  padding: 8px 0;
 }
 
 .diff-line {
   padding: 0 12px;
   white-space: pre-wrap;
   word-break: break-all;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-main);
 }
 
-.diff-add {
-  background: var(--diff-add-bg);
-  color: var(--diff-add-color);
-}
-
-.diff-del {
-  background: var(--diff-del-bg);
-  color: var(--diff-del-color);
-}
-
-.diff-meta {
-  color: var(--diff-meta-color);
-  font-weight: 500;
-  padding: 0 12px;
-}
-
-.diff-ctx {
-  color: var(--menu-child-color);
-}
+.diff-line.add { background: var(--diff-add-bg); color: var(--diff-add-color); }
+.diff-line.del { background: var(--diff-del-bg); color: var(--diff-del-color); }
+.diff-line.meta { color: var(--diff-meta-color); font-weight: 500; }
 
 .diff-separator {
   display: flex;
   align-items: center;
   padding: 4px 12px;
   margin: 4px 0;
-  color: var(--subtitle-color);
   font-size: 11px;
-  border-top: 1px solid var(--border-color);
-  border-bottom: 1px solid var(--border-color);
-  background: var(--section-header-bg);
   letter-spacing: 0.1em;
+  color: var(--color-text-muted);
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
 }
 
 .diff-empty {
@@ -83,6 +63,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--subtitle-color);
+  color: var(--color-text-muted);
   font-size: 13px;
 }

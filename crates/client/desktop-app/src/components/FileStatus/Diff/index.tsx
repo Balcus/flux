@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-import "../../../App.css";
 import "./Diff.css";
 
 export default function Diff({ path }: { path: string | null }) {
@@ -18,29 +17,26 @@ export default function Diff({ path }: { path: string | null }) {
   }, [path]);
 
   const renderDiff = (raw: string) => {
-    const lines = raw.split("\n");
     const result: React.ReactNode[] = [];
-
-    lines.forEach((line, i) => {
+    raw.split("\n").forEach((line, i) => {
       if (line.startsWith("@")) {
-        if (i > 0) {
+        if (i > 0)
           result.push(
             <div key={`sep-${i}`} className="diff-separator">
               <span>···</span>
             </div>,
           );
-        }
         result.push(
-          <div key={i} className="diff-line diff-meta">
+          <div key={i} className="diff-line meta">
             {line}
           </div>,
         );
       } else {
         const cls = line.startsWith("+")
-          ? "diff-add"
+          ? "add"
           : line.startsWith("-")
-            ? "diff-del"
-            : "diff-ctx";
+            ? "del"
+            : "";
         result.push(
           <div key={i} className={`diff-line ${cls}`}>
             {line}
@@ -48,20 +44,17 @@ export default function Diff({ path }: { path: string | null }) {
         );
       }
     });
-
     return result;
   };
 
   return (
     <div className="diff-pane">
-      <div className="diff-header">
-        <h1>
-          {path ?? "Select a file to see the diff"}
-        </h1>
-      </div>
-      <div className="diff-body">
+      <header>
+        <h1>{path ?? "Select a file to see the diff"}</h1>
+      </header>
+      <div>
         {diff ? (
-          <div className="diff-content">{renderDiff(diff)}</div>
+          <div style={{ padding: "8px 0" }}>{renderDiff(diff)}</div>
         ) : (
           <div className="diff-empty">No diff to display.</div>
         )}
