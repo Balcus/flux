@@ -1,4 +1,4 @@
-use crate::error;
+use anyhow::Context;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
@@ -55,19 +55,18 @@ pub struct Config {
 impl Config {
     pub fn empty_map() -> HashMap<Field, Option<String>> {
         let mut map = HashMap::new();
-        for field in [Field::UserName, Field::UserEmail, Field::Origin] {
-            map.insert(field, None);
-        }
+        map.insert(Field::UserName, None);
+        map.insert(Field::UserEmail, None);
+        map.insert(Field::Origin, None);
+        map.insert(Field::AccessToken, None);
         map
     }
 
-    pub fn default(path: impl Into<PathBuf>) -> Result<Self, error::ConfigError> {
+    pub fn default(path: impl Into<PathBuf>) -> anyhow::Result<Self> {
         let path = path.into();
 
-        let mut file = File::create(&path).map_err(|e| error::IoError::Create {
-            path: path.clone(),
-            source: e,
-        })?;
+        let mut file = File::create(&path)
+            .with_context(|| format!("Failed to create '{}'.", path.display()))?;
 
         writeln!(
             file,
@@ -79,10 +78,7 @@ impl Config {
 # user_email =
 # origin ="
         )
-        .map_err(|e| error::IoError::Write {
-            path: path.clone(),
-            source: e,
-        })?;
+        .with_context(|| format!("Failed to write '{}'.", path.display()))?;
 
         Ok(Self {
             path,
@@ -90,19 +86,16 @@ impl Config {
         })
     }
 
-    pub fn from(path: impl Into<PathBuf>) -> Result<Self, error::ConfigError> {
+    pub fn from(path: impl Into<PathBuf>) -> anyhow::Result<Self> {
         let path = path.into();
 
-        let content = fs::read_to_string(&path).map_err(|e| error::IoError::Read {
-            path: path.clone(),
-            source: e,
-        })?;
+        let content = fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read '{}'.", path.display()))?;
 
-        let temp_map: HashMap<String, String> =
-            toml::from_str(&content).map_err(error::ConfigError::TomlFromString)?;
+        let temp_map: HashMap<String, String> = toml::from_str(&content)
+            .with_context(|| format!("Failed to parse '{}'.", path.display()))?;
 
         let mut map = Self::empty_map();
-
         for (key, value) in temp_map {
             if let Ok(field) = key.parse::<Field>() {
                 map.insert(field, Some(value));
@@ -112,48 +105,47 @@ impl Config {
         Ok(Self { path, map })
     }
 
-    pub fn set(&mut self, key: String, value: String) -> Result<(), error::ConfigError> {
-        let field = key
-            .parse::<Field>()
-            .map_err(|_| error::ConfigError::UnsupportedField(key.clone()))?;
+    pub fn set(&mut self, key: String, value: String) -> anyhow::Result<()> {
+        let field = key.parse::<Field>().map_err(|_| {
+            anyhow::anyhow!("The field '{key}' is unsupported by the configuration.")
+        })?;
 
         self.map.insert(field, Some(value));
 
-        let mut serializable_map = std::collections::HashMap::new();
+        let mut serializable_map = HashMap::new();
         for (k, v) in &self.map {
             if let Some(val) = v {
                 serializable_map.insert(k.to_string(), val.clone());
             }
         }
 
-        let toml_string =
-            toml::to_string(&serializable_map).map_err(|e| error::IoError::Write {
-                path: self.path.clone(),
-                source: std::io::Error::new(std::io::ErrorKind::InvalidData, e),
-            })?;
+        let toml_string = toml::to_string(&serializable_map)
+            .with_context(|| format!("Failed to write '{}'.", self.path.display()))?;
 
         let temp_path = self.path.with_extension("tmp");
-        std::fs::write(&temp_path, &toml_string).map_err(|e| error::IoError::Write {
-            path: temp_path.clone(),
-            source: e,
-        })?;
-
-        std::fs::rename(&temp_path, &self.path).map_err(|e| error::IoError::Write {
-            path: self.path.clone(),
-            source: e,
+        fs::write(&temp_path, &toml_string)
+            .with_context(|| format!("Failed to write '{}'.", temp_path.display()))?;
+        fs::rename(&temp_path, &self.path).with_context(|| {
+            format!(
+                "Failed to rename '{}' to '{}'.",
+                temp_path.display(),
+                self.path.display()
+            )
         })?;
 
         Ok(())
     }
 
-    pub fn get_required(&self, field: Field) -> Result<String, error::ConfigError> {
+    pub fn get_required(&self, field: Field) -> anyhow::Result<String> {
         self.map
             .get(&field)
             .and_then(|v| v.clone())
-            .ok_or_else(|| error::ConfigError::NotSet(field.to_string()))
+            .with_context(|| {
+                format!("The variable '{field}' must be set, try using 'flux set {field} ...'")
+            })
     }
 
-    pub fn get_credentials(&self) -> Result<Credentials, error::ConfigError> {
+    pub fn get_credentials(&self) -> anyhow::Result<Credentials> {
         Ok(Credentials {
             user_name: self.get_required(Field::UserName)?,
             user_email: self.get_required(Field::UserEmail)?,
@@ -161,13 +153,10 @@ impl Config {
         })
     }
 
-    pub fn get(&self, key: &str) -> Result<Option<String>, error::ConfigError> {
-        let field = key
-            .parse::<Field>()
-            .map_err(|_| error::ConfigError::UnsupportedField(key.to_string()))?;
-
-        let val = self.map.get(&field).and_then(|v| v.clone());
-
-        Ok(val)
+    pub fn get(&self, key: &str) -> anyhow::Result<Option<String>> {
+        let field = key.parse::<Field>().map_err(|_| {
+            anyhow::anyhow!("The field '{key}' is unsupported by the configuration.")
+        })?;
+        Ok(self.map.get(&field).and_then(|v| v.clone()))
     }
 }

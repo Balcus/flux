@@ -1,3 +1,4 @@
 pub trait Command {
-    fn run(&mut self) -> anyhow::Result<()>;
+    type Output;
+    fn run(&mut self) -> anyhow::Result<Self::Output>;
 }

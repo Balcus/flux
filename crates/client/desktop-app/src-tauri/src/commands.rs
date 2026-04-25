@@ -1,15 +1,15 @@
 use crate::models::{
-    app_state::AppState, branch_info::BranchInfo, commit_info::CommitInfo,
-    repository_info::RepositoryInfo,
+    app_state::AppState, branch_info::BranchInfo, commit_graph_info::CommitGraphInfo,
+    graph_edge::GraphEdge, graph_node::GraphNode, repository_info::RepositoryInfo,
 };
 use flux_core::{
     commands::{
         add::AddCommand, command::Command, commit::CommitCommand, reset::ResetCommand,
         restore::RestoreCommand, rm::RmCommand,
     },
-    database::{commit::Commit, database::Database},
-    error::{ConfigError, RefsError},
+    database::database::Database,
     internals::repository::Repository,
+    traversal::commit_walker::CommitWalker,
 };
 use std::path::PathBuf;
 use tauri::State;
@@ -49,14 +49,12 @@ pub fn update_user_config(
     let repo = repo_lock
         .as_mut()
         .ok_or_else(|| "No repository open".to_string())?;
-
     repo.config
         .set("user_name".to_string(), user_name)
-        .map_err(|e: ConfigError| e.to_string())?;
+        .map_err(|e| e.to_string())?;
     repo.config
         .set("user_email".to_string(), user_email)
-        .map_err(|e: ConfigError| e.to_string())?;
-
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -66,11 +64,9 @@ pub fn update_origin(origin: String, state: State<AppState>) -> Result<(), Strin
     let repo = repo_lock
         .as_mut()
         .ok_or_else(|| "No repository open".to_string())?;
-
     repo.config
         .set("origin".to_string(), origin)
-        .map_err(|e: ConfigError| e.to_string())?;
-
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -80,11 +76,7 @@ pub fn get_branches(state: State<AppState>) -> Result<Vec<BranchInfo>, String> {
     let repo = repo_lock
         .as_ref()
         .ok_or_else(|| "No repository opened".to_string())?;
-
-    let current = repo
-        .refs
-        .current_branch()
-        .map_err(|e: RefsError| e.to_string())?;
+    let current = repo.refs.current_branch().map_err(|e| e.to_string())?;
     let mut branches: Vec<BranchInfo> = repo
         .refs
         .branch_names()
@@ -94,78 +86,45 @@ pub fn get_branches(state: State<AppState>) -> Result<Vec<BranchInfo>, String> {
             name,
         })
         .collect();
-
     branches.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(branches)
 }
 
 #[tauri::command]
-pub fn get_commits(state: State<AppState>) -> Result<Vec<CommitInfo>, String> {
+pub fn get_graph(state: State<AppState>) -> Result<CommitGraphInfo, String> {
     let repo_lock = state.repository.lock().unwrap();
     let repo = repo_lock
         .as_ref()
         .ok_or_else(|| "No repository open".to_string())?;
+
     let db = Database::open(repo.flux_dir.clone());
+    let walker = CommitWalker::new(&db);
+    let graph = walker.walk(&repo.refs).map_err(|e| e.to_string())?;
 
-    let mut commits_map: std::collections::HashMap<String, CommitInfo> =
-        std::collections::HashMap::new();
-    let mut branch_entries: Vec<(&String, &String)> = repo.refs.branches.iter().collect();
-
-    branch_entries.sort_by_key(|(name, _)| if *name == "main" { 0 } else { 1 });
-
-    for (branch_name, tip_hash) in branch_entries {
-        let mut current_hash = Some(tip_hash.clone());
-        while let Some(hash) = current_hash {
-            let obj = match db.read_object(&hash) {
-                Ok(o) => o,
-                Err(_) => break,
-            };
-            if let Some(commit) = obj.as_any().downcast_ref::<Commit>() {
-                let parent = commit.parent_hash().map(String::from);
-                commits_map
-                    .entry(hash.clone())
-                    .or_insert_with(|| CommitInfo {
-                        id: hash.clone(),
-                        message: commit.message.clone(),
-                        author: commit.author.clone(),
-                        parent: parent.clone(),
-                        branch: branch_name.clone(),
-                    });
-                current_hash = parent;
-            } else {
-                break;
-            }
-        }
-    }
-
-    let mut sorted_list = Vec::new();
-    let mut visited = std::collections::HashSet::new();
-
-    fn visit(
-        id: &str,
-        map: &std::collections::HashMap<String, CommitInfo>,
-        visited: &mut std::collections::HashSet<String>,
-        list: &mut Vec<CommitInfo>,
-    ) {
-        if visited.contains(id) || !map.contains_key(id) {
-            return;
-        }
-        visited.insert(id.to_string());
-        let commit = &map[id];
-        if let Some(ref parent_id) = commit.parent {
-            visit(parent_id, map, visited, list);
-        }
-        list.push(commit.clone());
-    }
-
-    let mut keys: Vec<String> = commits_map.keys().cloned().collect();
-    keys.sort();
-
-    for id in keys {
-        visit(&id, &commits_map, &mut visited, &mut sorted_list);
-    }
-
-    Ok(sorted_list)
+    Ok(CommitGraphInfo {
+        nodes: graph
+            .nodes
+            .iter()
+            .map(|n| GraphNode {
+                id: n.id.clone(),
+                short_id: n.short_id.clone(),
+                message: n.message.clone(),
+                author: n.author.clone(),
+                branches: n.branches.clone(),
+                parents: n.parents.clone(),
+                is_merge: n.is_merge,
+            })
+            .collect(),
+        edges: graph
+            .edges
+            .iter()
+            .map(|e| GraphEdge {
+                id: e.id.clone(),
+                source: e.source.clone(),
+                target: e.target.clone(),
+            })
+            .collect(),
+    })
 }
 
 #[tauri::command]
@@ -279,9 +238,9 @@ pub fn commit(message: String, state: State<AppState>) -> Result<(), String> {
     let mut repo = repo_lock
         .as_mut()
         .ok_or_else(|| "No repository open".to_string())?;
-
     CommitCommand::new(&mut repo, message)
         .map_err(|e| e.to_string())?
         .run()
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }

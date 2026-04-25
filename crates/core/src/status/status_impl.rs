@@ -172,7 +172,7 @@ impl Status {
 
 #[cfg(test)]
 mod tests {
-    use crate::commands::{add::AddCommand, command::Command, init::InitCommand};
+    use crate::commands::{add::AddCommand, command::Command, commit::CommitCommand, init::InitCommand};
 
     use super::*;
     use std::{fs, path::PathBuf};
@@ -288,7 +288,7 @@ mod tests {
         .run()?;
         repo.set("user_name".to_string(), "test_user".to_string())?;
         repo.set("user_email".to_string(), "test_user@email.com".to_string())?;
-        repo.commit("inital commit".to_string())?;
+        CommitCommand::new(&mut repo, "initial commit".to_string())?.run()?;
 
         fs::remove_file(&file_path)?;
         AddCommand {
@@ -392,7 +392,7 @@ mod tests {
             path: PathBuf::from("existing.txt"),
         }
         .run()?;
-        repo.commit("initial commit".to_string())?;
+        CommitCommand::new(&mut repo, "initial commit".to_string())?.run()?;
 
         fs::write(dir.path().join("new1.txt"), "new file 1")?;
         fs::write(dir.path().join("new2.txt"), "new file 2")?;
@@ -439,7 +439,7 @@ mod tests {
             path: PathBuf::from(file_name),
         }
         .run()?;
-        repo.commit("initial commit".to_string())?;
+        CommitCommand::new(&mut repo, "initial commit".to_string())?.run()?;
 
         fs::write(&file_path, "modified content")?;
         AddCommand {
@@ -475,7 +475,7 @@ mod tests {
             path: PathBuf::from("test.txt"),
         }
         .run()?;
-        repo.commit("initial commit".to_string())?;
+        CommitCommand::new(&mut repo, "initial commit".to_string())?.run()?;
 
         let status = Status::new(&repo)?;
         assert!(status.is_clean());
@@ -504,7 +504,7 @@ mod tests {
             path: PathBuf::from(file_name),
         }
         .run()?;
-        repo.commit("initial commit".to_string())?;
+        CommitCommand::new(&mut repo, "initial commit".to_string())?.run()?;
 
         fs::write(&file_path, "staged change")?;
         AddCommand {
@@ -562,7 +562,7 @@ mod tests {
             path: PathBuf::from(file_name),
         }
         .run()?;
-        repo.commit("initial commit".to_string())?;
+        CommitCommand::new(&mut repo, "initial commit".to_string())?.run()?;
 
         fs::write(&file_path, "temporary change")?;
         fs::write(&file_path, "original content")?;
@@ -604,7 +604,7 @@ mod tests {
             path: PathBuf::from("delete_me.txt"),
         }
         .run()?;
-        repo.commit("initial commit".to_string())?;
+        CommitCommand::new(&mut repo, "initial commit".to_string())?.run()?;
 
         fs::write(&modify_path, "changed")?;
         AddCommand {
@@ -665,7 +665,7 @@ mod tests {
             path: PathBuf::from("."),
         }
         .run()?;
-        repo.commit("initial commit".to_string())?;
+        CommitCommand::new(&mut repo, "initial commit".to_string())?.run()?;
 
         let status = Status::new(&repo)?;
         assert!(status.is_clean());

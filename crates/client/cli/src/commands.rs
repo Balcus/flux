@@ -2,9 +2,7 @@ use std::path::PathBuf;
 
 use flux_core::{
     commands::{
-        add::AddCommand, command::Command, commit::CommitCommand, diff::DiffCommand,
-        hash_object::HashObject, init::InitCommand, reset::ResetCommand, restore::RestoreCommand,
-        rm::RmCommand, status::StatusCommand,
+        add::AddCommand, command::Command, commit::CommitCommand, diff::DiffCommand, hash_object::HashObject, init::InitCommand, log::LogCommand, reset::ResetCommand, restore::RestoreCommand, rm::RmCommand, status::StatusCommand
     },
     internals::repository::Repository,
 };
@@ -60,7 +58,7 @@ pub fn commit(repo_path: Option<String>, message: String) -> anyhow::Result<()> 
 
 pub fn log(repo_path: Option<String>) -> anyhow::Result<()> {
     let repository = Repository::open(repo_path)?;
-    repository.log(None)?;
+    LogCommand::new(&repository).run()?;
     Ok(())
 }
 

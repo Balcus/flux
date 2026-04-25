@@ -1,4 +1,4 @@
-use crate::error;
+use anyhow::Context;
 use proto::models::auth_serviec_client::AuthServiecClient;
 use proto::models::{Chunk, IssueTokenResponse};
 use proto::models::{CloneRequest, UploadStatus};
@@ -11,7 +11,6 @@ use url::Url;
 
 // TODO: on clone create the direcotry for the repository, change iside the directory and then do the rest
 // make the clone push to origin so it wont create a new folder on server if i just change the name of the local folder
-pub type Result<T> = std::result::Result<T, error::GrpcClientError>;
 
 const CHUNK_SIZE: usize = 256 * 1024;
 
@@ -24,25 +23,16 @@ pub struct GrpcClient {
 }
 
 impl GrpcClient {
-    pub async fn connect_remote(url: String) -> Result<Self> {
-        let auth_client = AuthServiecClient::connect(url.clone()).await.map_err(|e| {
-            error::GrpcClientError::ConnectRemote {
-                url: url.clone(),
-                source: e,
-            }
-        })?;
-        let push_client = PushServiceClient::connect(url.clone()).await.map_err(|e| {
-            error::GrpcClientError::ConnectRemote {
-                url: url.clone(),
-                source: e,
-            }
-        })?;
+    pub async fn connect_remote(url: String) -> anyhow::Result<Self> {
+        let auth_client = AuthServiecClient::connect(url.clone())
+            .await
+            .with_context(|| format!("Failed to connect to remote repository at '{url}'."))?;
+        let push_client = PushServiceClient::connect(url.clone())
+            .await
+            .with_context(|| format!("Failed to connect to remote repository at '{url}'."))?;
         let clone_client = CloneServiceClient::connect(url.clone())
             .await
-            .map_err(|e| error::GrpcClientError::ConnectRemote {
-                url: url.clone(),
-                source: e,
-            })?;
+            .with_context(|| format!("Failed to connect to remote repository at '{url}'."))?;
         Ok(Self {
             auth_client,
             push_client,
@@ -51,18 +41,13 @@ impl GrpcClient {
         })
     }
 
-    pub fn repo_name(&self) -> Result<String> {
-        let url = Url::parse(&self.url).map_err(|e| error::GrpcClientError::Url {
-            url: self.url.clone(),
-            source: Some(e),
-        })?;
+    pub fn repo_name(&self) -> anyhow::Result<String> {
+        let url = Url::parse(&self.url)
+            .with_context(|| format!("Failed to parse url: '{}'.", self.url))?;
         let repo_name = url
             .path_segments()
             .and_then(|mut p| p.next_back())
-            .ok_or_else(|| error::GrpcClientError::Url {
-                url: self.url.clone(),
-                source: None,
-            })?;
+            .with_context(|| format!("Failed to parse url: '{}'.", self.url))?;
         Ok(repo_name.to_string())
     }
 
@@ -70,18 +55,16 @@ impl GrpcClient {
         &mut self,
         user_name: String,
         user_email: String,
-    ) -> Result<IssueTokenResponse> {
+    ) -> anyhow::Result<IssueTokenResponse> {
         let request = tonic::Request::new(proto::models::IssueTokenRequest {
             user_name,
             user_email,
         });
-
         let response = self
             .auth_client
             .issue_token(request)
             .await
-            .map_err(error::GrpcClientError::Auth)?;
-
+            .context("Failed authentication for remote server.")?;
         Ok(response.into_inner())
     }
 
@@ -92,7 +75,7 @@ impl GrpcClient {
         user_email: String,
         user_name: String,
         access_token: String,
-    ) -> Result<UploadStatus> {
+    ) -> anyhow::Result<UploadStatus> {
         let (tx, rx) = tokio::sync::mpsc::channel(32);
 
         tokio::spawn(async move {
@@ -101,7 +84,6 @@ impl GrpcClient {
                     repo_name: repo_name.clone(),
                     content: chunk.to_vec(),
                 };
-
                 if tx.send(msg).await.is_err() {
                     eprint!("Receiver dropped");
                     break;
@@ -127,21 +109,17 @@ impl GrpcClient {
             .push_client
             .push(request)
             .await
-            .map_err(error::GrpcClientError::Push)?;
+            .context("Failed to push to remote repository.")?;
         Ok(response.into_inner())
     }
 
-    pub fn extract_path(&self) -> Result<String> {
-        let url = Url::parse(&self.url).map_err(|e| error::GrpcClientError::Url {
-            url: self.url.clone(),
-            source: Some(e),
-        })?;
-
+    pub fn extract_path(&self) -> anyhow::Result<String> {
+        let url = Url::parse(&self.url)
+            .with_context(|| format!("Failed to parse url: '{}'.", self.url))?;
         Ok(url.path().trim_start_matches('/').to_string())
     }
 
-    // Changed temporarily to allow cloning any repo if the correct path on the server is given.
-    pub async fn clone_repository(&mut self) -> Result<Vec<u8>> {
+    pub async fn clone_repository(&mut self) -> anyhow::Result<Vec<u8>> {
         let path = self.extract_path()?;
         let request = tonic::Request::new(CloneRequest { name: path });
 
@@ -149,14 +127,14 @@ impl GrpcClient {
             .clone_client
             .clone_repository(request)
             .await
-            .map_err(error::GrpcClientError::Clone)?
+            .context("Failed to clone repository.")?
             .into_inner();
 
         let mut content = Vec::new();
         while let Some(chunk) = stream
             .message()
             .await
-            .map_err(error::GrpcClientError::Clone)?
+            .context("Failed to clone repository.")?
         {
             content.extend_from_slice(&chunk.content);
         }

@@ -16,6 +16,8 @@ impl<'a> StatusCommand<'a> {
 }
 
 impl<'a> Command for StatusCommand<'a> {
+    type Output = ();
+    
     fn run(&mut self) -> Result<()> {
         let status = Status::new(self.repo)?;
         let formatter = StatusFormatter::new(&status);

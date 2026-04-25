@@ -14,6 +14,8 @@ impl<'a> RmCommand<'a> {
 }
 
 impl<'a> Command for RmCommand<'a> {
+    type Output = ();
+    
     fn run(&mut self) -> anyhow::Result<()> {
         let mut index = Index::new(self.repo.flux_dir.join("index"));
         index.load()?;

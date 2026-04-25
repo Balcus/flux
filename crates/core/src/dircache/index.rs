@@ -101,6 +101,10 @@ impl Index {
         self.changed = false;
         Ok(())
     }
+
+    pub fn mark_changed(&mut self) {
+        self.changed = true;
+    }
 }
 
 #[cfg(test)]

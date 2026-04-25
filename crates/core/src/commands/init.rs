@@ -17,6 +17,8 @@ impl InitCommand {
 }
 
 impl Command for InitCommand {
+    type Output = ();
+    
     fn run(&mut self) -> anyhow::Result<()> {
         let work_tree_path = self
             .path
