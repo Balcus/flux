@@ -18,7 +18,7 @@ fn main() {
             commands::update_user_config,
             commands::update_origin,
             commands::get_branches,
-            commands::get_commits,
+            commands::get_graph,
             commands::add,
             commands::rm,
             commands::reset_soft,

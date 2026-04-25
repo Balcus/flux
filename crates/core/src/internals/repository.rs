@@ -166,24 +166,6 @@ impl Repository {
         Ok(hash)
     }
 
-    pub fn log(&self, _reference: Option<String>) -> Result<()> {
-        let db = Database::open(self.flux_dir.clone());
-        let mut current_hash = self.refs.head_commit().ok().filter(|s| !s.is_empty());
-
-        while let Some(hash) = current_hash {
-            let obj = db.read_object(&hash).unwrap();
-            println!("{}", obj);
-            let current = db.read_object(&hash).unwrap();
-            if let Some(commit) = current.as_any().downcast_ref::<Commit>() {
-                current_hash = commit.parent_hash().map(String::from);
-            } else {
-                break;
-            }
-        }
-
-        Ok(())
-    }
-
     pub fn show_branches(&self) -> Result<String> {
         let branches = self.refs.format_branches()?;
         Ok(branches)
@@ -334,16 +316,35 @@ impl Repository {
         }
 
         self.refs.switch_branch(name)?;
+        self.refs = Refs::load(&self.flux_dir)?;
+
+        self.work_tree.clear()?;
 
         let mut index = self.load_index()?;
         index.entries.clear();
-        index.write_updates()?;
 
-        self.work_tree.clear()?;
         let commit = self.refs.head_commit()?;
         if !commit.is_empty() {
             self.work_tree.restore_from_commit(&commit)?;
+
+            let db = Database::open(self.flux_dir.clone());
+            let file_map = db.commit_to_map(commit)?;
+
+            for (path, hash) in file_map {
+                let full_path = self.work_tree.path().join(&path);
+                let stat = std::fs::metadata(&full_path)?;
+                let id_bytes = hex::decode(&hash)?;
+                let id: [u8; 20] = id_bytes
+                    .try_into()
+                    .map_err(|_| anyhow::anyhow!("Invalid SHA"))?;
+                let entry =
+                    crate::dircache::index_entry::IndexEntry::create(path.clone(), id, &stat, 0);
+                index.entries.insert((path, 0), entry);
+            }
         }
+
+        index.mark_changed();
+        index.write_updates()?;
 
         Ok(())
     }

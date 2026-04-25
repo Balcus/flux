@@ -1,32 +1,77 @@
 .history-container {
+  width: 100%;
+  height: 100%;
+  background: var(--color-bg-secondary);
+}
+
+.commit-node {
+  width: 240px;
+  background: var(--color-bg-main);
+  border: var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-family: var(--font-family);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.commit-icon {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  opacity: 0.4;
+}
+
+.commit-content {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  width: 100%;
+  gap: 3px;
 }
 
-.history-list {
-  flex: 1;
-  overflow: auto;
-  background-color: var(--bg-color);
-}
-
-.history-graph {
-  padding: 20px;
-  min-width: fit-content;
-}
-
-.history-graph svg {
-  transform: scale(0.85);
-  transform-origin: top left;
-}
-
-.history-empty {
+.commit-heads {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 0.25rem;
+}
+
+.commit-head {
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 6px;
+  background: var(--color-primary);
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+
+.commit-message {
+  margin: 0;
   font-size: 12px;
-  color: var(--color-text-tertiary);
-  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--color-text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.commit-author {
+  margin: 0;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.commit-hash {
+  font-size: 9px;
+  color: var(--color-text-muted);
+  opacity: 0.6;
+  letter-spacing: 0.03em;
 }

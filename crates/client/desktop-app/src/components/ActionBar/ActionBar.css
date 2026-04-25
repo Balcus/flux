@@ -9,7 +9,6 @@
   width: 100%;
   border-bottom: var(--border);
   background-color: var(--color-bg-secondary);
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
   position: relative;
   z-index: 1;
 }

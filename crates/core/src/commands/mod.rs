@@ -4,6 +4,7 @@ pub mod commit;
 pub mod diff;
 pub mod hash_object;
 pub mod init;
+pub mod log;
 pub mod reset;
 pub mod restore;
 pub mod rm;
