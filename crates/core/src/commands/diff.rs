@@ -161,6 +161,8 @@ impl<'a> DiffCommand<'a> {
 }
 
 impl<'a> Command for DiffCommand<'a> {
+    type Output = ();
+    
     fn run(&mut self) -> Result<()> {
         match self.staged {
             false => self.diff_index_workspace(),

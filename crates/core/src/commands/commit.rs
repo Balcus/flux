@@ -44,7 +44,9 @@ impl<'a> CommitCommand<'a> {
 }
 
 impl<'a> Command for CommitCommand<'a> {
-    fn run(&mut self) -> anyhow::Result<()> {
+    type Output = String;
+
+    fn run(&mut self) -> anyhow::Result<String> {
         let status = Status::new(self.repo)?;
         let mut index = Index::new(self.repo.flux_dir.join("index"));
         index.load()?;
@@ -75,7 +77,7 @@ impl<'a> Command for CommitCommand<'a> {
 
         println!("{commit_id}");
 
-        Ok(())
+        Ok(commit_id)
     }
 }
 
@@ -186,9 +188,10 @@ pub mod tests {
         }
         .run()?;
 
-        let res = repo.commit("Initial commit".to_string());
-        let err = res.unwrap_err();
-        assert!(err.to_string().contains("credentials"));
+        let res = CommitCommand::new(&mut repo, "initial commit".to_string())
+            .and_then(|mut cmd| cmd.run());
+        assert!(res.is_err());
+        assert!(res.unwrap_err().to_string().contains("credentials"));
         Ok(())
     }
 }

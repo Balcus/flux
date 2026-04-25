@@ -17,6 +17,8 @@ impl<'a> RestoreCommand<'a> {
 }
 
 impl<'a> Command for RestoreCommand<'a> {
+    type Output = ();
+    
     fn run(&mut self) -> anyhow::Result<()> {
         let mut index = Index::new(self.repo.flux_dir.join("index"));
         index.load()?;

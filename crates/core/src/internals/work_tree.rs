@@ -5,7 +5,6 @@ use crate::database::object::Object;
 use crate::database::tree::Tree;
 use crate::database::tree_entry::TreeEntry;
 use crate::dircache::index::Index;
-use crate::error;
 use anyhow::Context;
 use std::collections::HashMap;
 use std::fs::{self, Metadata};
@@ -176,51 +175,42 @@ impl WorkTree {
         }
     }
 
-    pub fn clear(&self) -> Result<(), error::WorkTreeError> {
-        let iter = fs::read_dir(&self.path).map_err(|e| error::IoError::Read {
-            path: self.path.clone(),
-            source: e,
-        })?;
+    pub fn clear(&self) -> anyhow::Result<()> {
+        let iter = fs::read_dir(&self.path)
+            .with_context(|| format!("Failed to read '{}'.", self.path.display()))?;
 
         for entry in iter {
-            let entry = entry.map_err(|e| error::IoError::Read {
-                path: self.path.clone(),
-                source: e,
-            })?;
+            let entry =
+                entry.with_context(|| format!("Failed to read '{}'.", self.path.display()))?;
 
             let path = entry.path();
             if path.file_name().and_then(|n| n.to_str()) == Some(".flux") {
                 continue;
             }
 
-            let ft = entry.file_type().map_err(|e| error::IoError::Read {
-                path: path.clone(),
-                source: e,
-            })?;
+            let ft = entry
+                .file_type()
+                .with_context(|| format!("Failed to read '{}'.", path.display()))?;
 
             if ft.is_file() || ft.is_symlink() {
-                fs::remove_file(&path).map_err(|e| error::IoError::Delete {
-                    path: path.clone(),
-                    source: e,
-                })?;
+                fs::remove_file(&path)
+                    .with_context(|| format!("Failed to delete '{}'.", path.display()))?;
             } else if ft.is_dir() {
-                fs::remove_dir_all(&path).map_err(|e| error::IoError::Delete {
-                    path: path.clone(),
-                    source: e,
-                })?;
+                fs::remove_dir_all(&path)
+                    .with_context(|| format!("Failed to delete '{}'.", path.display()))?;
             }
         }
 
         Ok(())
     }
 
-    pub fn restore_from_commit(&self, commit_hash: &str) -> Result<(), error::WorkTreeError> {
+    pub fn restore_from_commit(&self, commit_hash: &str) -> anyhow::Result<()> {
         let db = Database::open(self.path.join(".flux"));
         let commit_obj = db.read_object(commit_hash).unwrap();
         let commit = commit_obj
             .as_any()
             .downcast_ref::<Commit>()
-            .ok_or(error::WorkTreeError::Downcast { expected: "commit" })?;
+            .context("Object downcast error, expected type: 'commit'.")?;
         let tree_hash = &commit.tree_hash;
         self.restore_tree(tree_hash, &self.path, &db)?;
         Ok(())
@@ -231,38 +221,27 @@ impl WorkTree {
         tree_hash: &str,
         target_dir: &Path,
         db: &Database,
-    ) -> Result<(), error::WorkTreeError> {
+    ) -> anyhow::Result<()> {
         let tree_obj = db.read_object(tree_hash).unwrap();
-
         let tree = tree_obj
             .as_any()
             .downcast_ref::<Tree>()
-            .ok_or(error::WorkTreeError::Downcast { expected: "tree" })?;
+            .context("Object downcast error, expected type: 'tree'.")?;
 
-        let entries = tree.entries();
-
-        for entry in entries {
+        for entry in tree.entries() {
             let target_path = target_dir.join(&entry.name);
-
             if entry.is_dir() {
-                fs::create_dir_all(&target_path).map_err(|e| error::IoError::Create {
-                    path: target_path.clone(),
-                    source: e,
-                })?;
+                fs::create_dir_all(&target_path)
+                    .with_context(|| format!("Failed to create '{}'.", target_path.display()))?;
                 self.restore_tree(&entry.id, &target_path, db)?;
             } else {
                 let blob_obj = db.read_object(&entry.id).unwrap();
                 let blob = blob_obj
                     .as_any()
                     .downcast_ref::<Blob>()
-                    .ok_or(error::WorkTreeError::Downcast { expected: "blob" })?;
-                let blob_content = blob.as_string();
-                fs::write(&target_path, blob_content.as_bytes()).map_err(|e| {
-                    error::IoError::Write {
-                        path: target_path.clone(),
-                        source: e,
-                    }
-                })?;
+                    .context("Object downcast error, expected type: 'blob'.")?;
+                fs::write(&target_path, blob.as_string().as_bytes())
+                    .with_context(|| format!("Failed to write '{}'.", target_path.display()))?;
             }
         }
 

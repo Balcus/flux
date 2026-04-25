@@ -1,10 +1,10 @@
 use flux_core::commands::add::AddCommand;
 use flux_core::commands::command::Command;
+use flux_core::commands::commit::CommitCommand;
 use flux_core::commands::hash_object::HashObject;
 use flux_core::commands::init::InitCommand;
 use flux_core::database::database::Database;
 use flux_core::dircache::index::Index;
-use flux_core::error;
 use flux_core::internals::repository::Repository;
 use serial_test::serial;
 use std::fs;
@@ -37,18 +37,8 @@ fn open_without_repo() {
     let (_temp, project_path) = common::setup_test_project();
     let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
 
-    let err = Repository::open(None).err().unwrap();
-    match &err {
-        flux_core::error::RepositoryError::NotRepository(path) => {
-            let expected = project_path
-                .canonicalize()
-                .unwrap_or_else(|_| project_path.clone());
-
-            assert_eq!(path, &expected);
-            assert!(path.is_absolute());
-        }
-        other => panic!("expected NotRepository error, got: {other:?}"),
-    }
+    let err = Repository::open(None).unwrap_err();
+    assert!(err.to_string().contains("not initialized"), "got: {err}");
     println!("{err}");
 }
 
@@ -101,6 +91,7 @@ fn commit() {
     }
     .run()
     .expect("Failed to add README to index");
+
     let mut index = Index::new(repo.flux_dir.join("index"));
     index.load().unwrap();
     let entry = index
@@ -116,6 +107,7 @@ fn commit() {
     }
     .run()
     .expect("Failed to add src to index");
+
     let main_hash = HashObject::new("./src/main.rs", false)
         .hash(None)
         .expect("Failed to hash file ./src/main.rs");
@@ -151,9 +143,10 @@ fn commit() {
         .join(&main_hash[2..]);
     assert!(main_object_path.exists());
 
-    let commit_hash = repo
-        .commit("Initial commit".to_string())
-        .expect("Failed to create inital commit");
+    let commit_hash = CommitCommand::new(&mut repo, "Initial commit".to_string())
+        .unwrap()
+        .run()
+        .expect("Failed to create initial commit");
     let commit_object_path = project_path
         .join(".flux/objects")
         .join(&commit_hash[..2])
@@ -178,7 +171,6 @@ fn commit() {
 
     let tree_line = commit_content.lines().next().unwrap();
     let tree_hash = tree_line.strip_prefix("tree ").unwrap().trim();
-
     let tree_object_path = project_path
         .join(".flux/objects")
         .join(&tree_hash[..2])
@@ -192,8 +184,10 @@ fn commit() {
     }
     .run()
     .unwrap();
-    let second_commit_hash = repo
-        .commit("Second commit".to_string())
+
+    let second_commit_hash = CommitCommand::new(&mut repo, "Second commit".to_string())
+        .unwrap()
+        .run()
         .expect("Failed to create second commit");
     assert_ne!(commit_hash, second_commit_hash);
 
@@ -217,7 +211,8 @@ fn commit_with_empty_index() {
     InitCommand::new(None, true).run().unwrap();
     let mut repo = Repository::open(None).unwrap();
 
-    assert!(repo.commit("empty".to_string()).is_err());
+    let res = CommitCommand::new(&mut repo, "commit".to_string()).and_then(|mut cmd| cmd.run());
+    assert!(res.is_err());
 }
 
 #[test]
@@ -236,102 +231,74 @@ fn commit_without_credentials() {
     .run()
     .unwrap();
 
-    assert!(repo.commit("commit".to_string()).is_err());
+    let res = CommitCommand::new(&mut repo, "commit".to_string()).and_then(|mut cmd| cmd.run());
+    assert!(res.is_err());
 }
 
 #[test]
 #[serial]
-fn branching() {
-    let (_temp, project_path) = common::setup_test_project();
-    let _guard = common::WorkingDirGuard::new(&project_path).unwrap();
+fn branching() -> anyhow::Result<()> {
+    let (_temp, _project_path) = common::setup_test_project();
+    let _guard = common::WorkingDirGuard::new(&_project_path).unwrap();
 
-    InitCommand::new(None, true).run().unwrap();
-    let mut repo = Repository::open(None).unwrap();
+    InitCommand::new(None, true).run()?;
+    let mut repo = Repository::open(None)?;
 
-    repo.set(String::from("user_name"), String::from("test"))
-        .expect("Failed to set user name");
-    repo.set(String::from("user_email"), String::from("test@gmail.com"))
-        .expect("Failed to set user email");
+    repo.set(String::from("user_name"), String::from("test"))?;
+    repo.set(String::from("user_email"), String::from("test@gmail.com"))?;
 
     AddCommand {
         repo: &mut repo,
         path: PathBuf::from("."),
     }
-    .run()
-    .expect("Failed to add changes to index");
-    let first_commit_hash = repo
-        .commit(String::from("First commit on branch main"))
-        .unwrap();
+    .run()?;
 
-    assert_eq!(repo.refs.head_ref().unwrap(), "refs/heads/main");
-    assert_eq!(
-        &repo
-            .refs
-            .current_branch()
-            .expect("Could not read current branch name"),
-        "main"
-    );
-    let head_content = fs::read_to_string(repo.flux_dir.join(repo.refs.head_ref().unwrap()))
-        .expect("Could not read HEAD content");
+    let first_commit_hash =
+        CommitCommand::new(&mut repo, "First commit on branch main".to_string())?.run()?;
+
+    assert_eq!(repo.refs.head_ref()?, "refs/heads/main");
+    assert_eq!(repo.refs.current_branch()?, "main");
+
+    let head_content = fs::read_to_string(_project_path.join(".flux").join(repo.refs.head_ref()?))?;
     assert_eq!(head_content, first_commit_hash);
 
-    repo.new_branch("feature").unwrap();
-    assert!(fs::exists(repo.flux_dir.join("refs/heads/feature")).unwrap());
-    let feature_content = fs::read_to_string(repo.flux_dir.join("refs/heads/feature")).unwrap();
+    repo.new_branch("feature")?;
+    assert!(fs::exists(repo.flux_dir.join("refs/heads/feature"))?);
+    let feature_content = fs::read_to_string(repo.flux_dir.join("refs/heads/feature"))?;
     assert_eq!(feature_content, head_content);
 
-    assert!(fs::exists(repo.work_tree.path().join("README.md")).unwrap());
-    assert!(fs::exists(repo.work_tree.path().join("src/main.rs")).unwrap());
-    assert!(fs::exists(repo.work_tree.path().join("src/lib.rs")).unwrap());
+    assert!(fs::exists(repo.work_tree.path().join("README.md"))?);
+    assert!(fs::exists(repo.work_tree.path().join("src/main.rs"))?);
+    assert!(fs::exists(repo.work_tree.path().join("src/lib.rs"))?);
 
-    repo.switch_branch("main", false).unwrap();
-    assert!(fs::exists(repo.work_tree.path().join("README.md")).unwrap());
-    assert!(fs::exists(repo.work_tree.path().join("src/main.rs")).unwrap());
-    assert!(fs::exists(repo.work_tree.path().join("src/lib.rs")).unwrap());
+    repo.switch_branch("main", false)?;
+    assert!(fs::exists(repo.work_tree.path().join("README.md"))?);
+    assert!(fs::exists(repo.work_tree.path().join("src/main.rs"))?);
+    assert!(fs::exists(repo.work_tree.path().join("src/lib.rs"))?);
 
-    fs::write("README.md", "Added something new to README").unwrap();
+    fs::write("README.md", "Added something new to README")?;
     AddCommand {
         repo: &mut repo,
         path: PathBuf::from("."),
     }
-    .run()
-    .expect("Failed to add changes to index");
-    let second_commit_hash = repo
-        .commit("Second commit on main branch".to_string())
-        .expect("Failed to create the second commit on branch main");
+    .run()?;
 
-    let main_head = fs::read_to_string(repo.flux_dir.join("refs/heads/main")).unwrap();
+    let second_commit_hash =
+        CommitCommand::new(&mut repo, "Second commit on main branch".to_string())?.run()?;
+
+    let main_head = fs::read_to_string(repo.flux_dir.join("refs/heads/main"))?;
     assert_eq!(second_commit_hash, main_head);
-    assert_eq!(
-        second_commit_hash,
-        repo.refs
-            .head_commit()
-            .expect("Failed to read the commit HEAD points to")
-    );
+    assert_eq!(second_commit_hash, repo.refs.head_commit()?);
 
-    repo.switch_branch("feature", false).unwrap();
-    assert_eq!(
-        repo.refs
-            .current_branch()
-            .expect("Failed to read current branch name"),
-        "feature"
-    );
-    assert_eq!(
-        first_commit_hash,
-        repo.refs
-            .head_commit()
-            .expect("Failed to read the commit HEAD points to")
-    );
+    repo.switch_branch("feature", false)?;
+    assert_eq!(repo.refs.current_branch()?, "feature");
+    assert_eq!(first_commit_hash, repo.refs.head_commit()?);
     assert!(
-        fs::read_to_string("./README.md")
-            .unwrap()
-            .contains("Read this file before running the project")
+        fs::read_to_string("./README.md")?.contains("Read this file before running the project")
     );
-    assert!(
-        !fs::read_to_string("./README.md")
-            .unwrap()
-            .contains("Added something new to README")
-    );
+    assert!(!fs::read_to_string("./README.md")?.contains("Added something new to README"));
+
+    Ok(())
 }
 
 #[test]
@@ -343,41 +310,32 @@ fn branching_errors() {
     InitCommand::new(None, true).run().unwrap();
     let mut repo = Repository::open(None).unwrap();
 
-    let res = repo.delete_branch("main");
-    let err = res.expect_err("Expected error when deleting main branch, found Ok()");
-    assert!(matches!(
-        err,
-        error::RepositoryError::Refs(error::RefsError::DeleteCurrentBranch(..))
-    ));
+    let err = repo.delete_branch("main").unwrap_err();
+    assert!(
+        err.to_string().contains("Cannot delete the current branch"),
+        "got: {err}"
+    );
     println!("{err}");
 
     assert!(repo.switch_branch("does-not-exist", false).is_err());
 
-    let res = repo.new_branch("main");
-    let err = res.expect_err("expected error when creating already existing branch, found Ok()");
-    assert!(matches!(
-        err,
-        error::RepositoryError::Refs(error::RefsError::BranchAlreadyExists(..))
-    ));
+    let err = repo.new_branch("main").unwrap_err();
+    assert!(err.to_string().contains("already exists"), "got: {err}");
     println!("{err}");
 
     fs::remove_dir_all(&repo.refs.refs_path).unwrap();
-    let res = Repository::open(None);
-    let err = res.expect_err(
-        "expected error when opening repository after deleting refs folder but found Ok()",
+    let err = Repository::open(None).unwrap_err();
+    assert!(
+        err.to_string().contains("Missing required path"),
+        "got: {err}"
     );
-    assert!(matches!(
-        err,
-        error::RepositoryError::Refs(error::RefsError::Io(..))
-    ));
     println!("{err}");
 
     fs::write(&repo.refs.head_path, "invalidate head").unwrap();
-    let res = repo.show_branches();
-    let err = res.expect_err("expected error with invalid HEAD, found Ok()");
-    assert!(matches!(
-        err,
-        error::RepositoryError::Refs(error::RefsError::InvalidHead { .. })
-    ));
+    let err = repo.show_branches().unwrap_err();
+    assert!(
+        err.to_string().contains("Invalid head format"),
+        "got: {err}"
+    );
     println!("{err}");
 }

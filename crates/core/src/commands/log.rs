@@ -19,6 +19,8 @@ impl<'a> LogCommand<'a> {
 }
 
 impl<'a> Command for LogCommand<'a> {
+    type Output = ();
+    
     fn run(&mut self) -> anyhow::Result<()> {
         let mut current_hash = self.repo.refs.head_commit().ok().filter(|s| !s.is_empty());
 

@@ -51,6 +51,8 @@ impl<'a> HashObject<'a> {
 }
 
 impl<'a> Command for HashObject<'a> {
+    type Output = ();
+    
     fn run(&mut self) -> anyhow::Result<()> {
         let hash = self.hash(None)?;
         println!("{}", hash);

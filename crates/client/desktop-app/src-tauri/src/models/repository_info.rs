@@ -1,7 +1,5 @@
 use crate::models::{branch_info::BranchInfo, stage_file::StagedFile, status_info::StatusInfo};
-use flux_core::{
-    error::ConfigError, internals::repository::Repository, status::status_impl::Status,
-};
+use flux_core::{internals::repository::Repository, status::status_impl::Status};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -20,7 +18,6 @@ impl RepositoryInfo {
     pub fn from_repo(repo: &Repository) -> Result<Self, String> {
         let head = repo.refs.head_ref().map_err(|e| e.to_string())?;
         let current = repo.refs.current_branch().map_err(|e| e.to_string())?;
-
         let mut branches: Vec<BranchInfo> = repo
             .refs
             .branch_names()
@@ -32,21 +29,11 @@ impl RepositoryInfo {
             .collect();
         branches.sort_by(|a, b| a.name.cmp(&b.name));
 
-        let user_name = repo
-            .config
-            .get("user_name")
-            .map_err(|e: ConfigError| e.to_string())?;
-        let user_email = repo
-            .config
-            .get("user_email")
-            .map_err(|e: ConfigError| e.to_string())?;
-        let origin = repo
-            .config
-            .get("origin")
-            .map_err(|e: ConfigError| e.to_string())?;
+        let user_name = repo.config.get("user_name").map_err(|e| e.to_string())?;
+        let user_email = repo.config.get("user_email").map_err(|e| e.to_string())?;
+        let origin = repo.config.get("origin").map_err(|e| e.to_string())?;
 
         let status = Status::new(repo).map_err(|e| e.to_string())?;
-
         let mut staged: Vec<StagedFile> = status
             .index_changes
             .iter()
@@ -55,7 +42,6 @@ impl RepositoryInfo {
                 change_type: change.to_string(),
             })
             .collect();
-
         staged.sort();
 
         let mut unstaged: Vec<StagedFile> = status
@@ -66,7 +52,6 @@ impl RepositoryInfo {
                 change_type: change.to_string(),
             })
             .collect();
-
         unstaged.sort();
 
         Ok(Self {

@@ -58,6 +58,8 @@ impl<'a> AddCommand<'a> {
 }
 
 impl<'a> Command for AddCommand<'a> {
+    type Output = ();
+    
     fn run(&mut self) -> anyhow::Result<()> {
         let full_path = self.repo.work_tree.path().join(&self.path);
         let mut index = Index::new(self.repo.flux_dir.join("index"));
