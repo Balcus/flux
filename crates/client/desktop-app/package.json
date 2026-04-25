@@ -10,15 +10,16 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.0.0",
     "@gitgraph/js": "^1.4.0",
-    "@gitgraph/react": "^1.6.0",
     "@tauri-apps/api": "2.10.1",
     "@tauri-apps/plugin-dialog": "2.6.0",
     "@tauri-apps/plugin-opener": "2.2.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.11.0",
-    "react-toastify": "^11.0.5"
+    "react-toastify": "^11.0.5",
+    "reactflow": "^11.11.4"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.10.1",
