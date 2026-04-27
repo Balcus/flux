@@ -13,7 +13,6 @@ pub struct Refs {
     pub head_path: PathBuf,
 }
 
-// TODO: change the switch branch logic, currently a commit no longer clears the index (it shouldnt have either)
 impl Refs {
     fn parse_head_ref(head_contents: &str) -> anyhow::Result<String> {
         let s = head_contents.trim();

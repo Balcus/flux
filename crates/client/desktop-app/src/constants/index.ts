@@ -15,7 +15,10 @@ export interface MenuItem {
   icon?: string;
   className?: string;
   link?: string;
+  contextMenuId?: string;
 }
+
+export const BRANCH_CONTEXT_MENU_ID = 'branch-context-menu';
 
 export const MENU_ITEMS: MenuItem[] = [
   {
@@ -33,6 +36,7 @@ export const MENU_ITEMS: MenuItem[] = [
     label: "Branches",
     children: [],
     icon: BranchIcon,
+    contextMenuId: BRANCH_CONTEXT_MENU_ID,
   },
 ];
 

@@ -1,10 +1,19 @@
 import { useState, useEffect } from "react";
-import { MENU_ITEMS, MenuItem } from "../../constants";
+import { BRANCH_CONTEXT_MENU_ID, MENU_ITEMS, MenuItem } from "../../constants";
 import { useRepository } from "../../context/RepositoryContext";
 import { Branch } from "../../models/Branch";
 import { useNavigate } from "react-router-dom";
+import {
+  useContextMenu,
+  Menu as ContextMenu,
+  Item,
+  ItemParams,
+} from "react-contexify";
+import { invoke } from "@tauri-apps/api/core";
+import { toast } from "react-toastify";
 
 import "./Menu.css";
+import "react-contexify/ReactContexify.css";
 
 export default function Menu() {
   const [expandedItems, setExpandedItems] = useState<string[]>([
@@ -12,7 +21,8 @@ export default function Menu() {
     "branches",
   ]);
   const [branches, setBranches] = useState<MenuItem[]>([]);
-  const { repository } = useRepository();
+  const { repository, refreshRepository } = useRepository();
+  const { show } = useContextMenu({ id: BRANCH_CONTEXT_MENU_ID });
   const nav = useNavigate();
 
   useEffect(() => {
@@ -27,6 +37,43 @@ export default function Menu() {
     }
   }, [repository]);
 
+  const handleSwitch = async ({ props, data }: ItemParams) => {
+    const name = props?.branchName;
+    const force = data?.force || false;
+
+    if (name) {
+      try {
+        await invoke("switch_branch", {
+          name,
+          force,
+        });
+
+        await refreshRepository();
+        toast.success(`Switched to branch ${name} ${force ? "(force)" : ""}`);
+      } catch (err) {
+        toast.error(`Switch failed: ${err}`);
+      }
+    }
+  };
+
+  const handleDelete = async ({ props }: ItemParams) => {
+    const name = props?.branchName;
+
+    if (name) {
+      try {
+        await invoke("delete_branch", { name });
+        await refreshRepository();
+        toast.success(`Deleted branch ${name}`);
+      } catch (err) {
+        toast.error(`Delete failed: ${err}`);
+      }
+    }
+  };
+
+  const handleRename = ({ props }: ItemParams) => {
+    console.log("rename:", props?.branchName);
+  };
+
   const handleItemClick = (item: MenuItem) => {
     if (item.children?.length) {
       setExpandedItems((prev) =>
@@ -39,10 +86,19 @@ export default function Menu() {
     }
   };
 
-  const renderMenuItem = (item: MenuItem, isChild = false) => (
+  const renderMenuItem = (
+    item: MenuItem,
+    isChild = false,
+    contextMenuId?: string,
+  ) => (
     <li key={item.id} className={isChild ? "child" : ""}>
       <button
         onClick={() => handleItemClick(item)}
+        onContextMenu={
+          contextMenuId
+            ? (e) => show({ event: e, props: { branchName: item.label } })
+            : undefined
+        }
         className={`${isChild ? "" : "section-header"} ${item.className || ""}`}
       >
         {!isChild && (
@@ -60,7 +116,11 @@ export default function Menu() {
         {item.label}
       </button>
       {item.children && expandedItems.includes(item.id) && (
-        <ul>{item.children.map((child) => renderMenuItem(child, true))}</ul>
+        <ul>
+          {item.children.map((child) =>
+            renderMenuItem(child, true, item.contextMenuId),
+          )}
+        </ul>
       )}
     </li>
   );
@@ -78,6 +138,17 @@ export default function Menu() {
       <nav>
         <ul>{finalMenu.map((item) => renderMenuItem(item))}</ul>
       </nav>
+
+      <ContextMenu id={BRANCH_CONTEXT_MENU_ID}>
+        <Item onClick={handleSwitch} data={{ force: false }}>
+          Switch
+        </Item>
+        <Item onClick={handleSwitch} data={{ force: true }}>
+          Force Switch
+        </Item>
+        <Item onClick={handleRename}>Rename</Item>
+        <Item onClick={handleDelete}>Delete</Item>
+      </ContextMenu>
     </div>
   );
 }

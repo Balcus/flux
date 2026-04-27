@@ -25,7 +25,9 @@ fn main() {
             commands::reset_hard,
             commands::restore,
             commands::get_diff,
-            commands::commit
+            commands::commit,
+            commands::switch_branch,
+            commands::delete_branch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
