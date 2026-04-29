@@ -1,18 +1,29 @@
 import { RowMeta } from "../../../models/HistoryGraphLayout";
 import { HeadChip } from "../HeadChip";
 
-import './CommitRow.css';
+import "./CommitRow.css";
 
 interface CommitRowProps {
   row: RowMeta;
   graphWidth: number;
   style: React.CSSProperties;
+  currentBranch: string | null;
 }
 
-export function CommitRow({ row, graphWidth, style }: CommitRowProps) {
+export function CommitRow({
+  row,
+  graphWidth,
+  style,
+  currentBranch,
+}: CommitRowProps) {
   const { node } = row;
+  const isCurrentBranchHead =
+    currentBranch !== null && node.branches.includes(currentBranch);
   return (
-    <div className="commit-row" style={style}>
+    <div
+      className={`commit-row${isCurrentBranchHead ? " current-branch" : ""}`}
+      style={style}
+    >
       <div style={{ width: graphWidth, flexShrink: 0 }} />
       <div className="commit-row__info">
         <div className="commit-row__top">

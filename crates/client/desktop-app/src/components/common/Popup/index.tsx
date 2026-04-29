@@ -1,6 +1,6 @@
-import React from 'react';
-
-import './Popup.css';
+import React from "react";
+import { createPortal } from "react-dom";
+import "./Popup.css";
 
 interface PopUpProps {
   showPopUp: boolean;
@@ -9,16 +9,19 @@ interface PopUpProps {
 }
 
 export default function Popup({ showPopUp, closePopUp, children }: PopUpProps) {
-    if (!showPopUp) return null;
-    
-    return (
-        <div className="popup-overlay">
-            <div className="popup-content">
-                <button className="close-btn" onClick={closePopUp} aria-label="Close">
-                    &times;
-                </button>
-                {children}
-            </div>
-        </div>
-    );
+  if (!showPopUp) {
+    return null;
+  }
+
+  return createPortal(
+    <div className="popup-overlay">
+      <div className="popup-content">
+        <button className="close-btn" onClick={closePopUp} aria-label="Close">
+          &times;
+        </button>
+        {children}
+      </div>
+    </div>,
+    document.body,
+  );
 }

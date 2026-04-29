@@ -54,7 +54,7 @@ export function GraphColumn({
               strokeOpacity={0.9}
             />
           );
-        const cy = seg.fromRow * ROW_H + ROW_H;
+        const midY = (y1 + y2) / 2;
         return (
           <path
             key={i}
@@ -62,7 +62,7 @@ export function GraphColumn({
             stroke={seg.color}
             strokeWidth={1.5}
             strokeOpacity={0.9}
-            d={`M ${x1} ${y1} C ${x1} ${cy}, ${x2} ${cy}, ${x2} ${y2}`}
+            d={`M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`}
           />
         );
       })}

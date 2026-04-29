@@ -6,6 +6,12 @@
   cursor: default;
   transition: background 80ms ease;
   user-select: none;
+  border-bottom: 0.5px solid var(--color-border);
+  border-radius: 12px 0 0 12px;;
+}
+
+.current-branch {
+  background-color: var(--color-primary);
 }
 
 .commit-row:hover {
@@ -18,7 +24,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: 3px;
   padding: 0 12px 0 8px;
   height: 100%;
 }
@@ -65,4 +71,20 @@
   opacity: 0.55;
   letter-spacing: 0.04em;
   flex-shrink: 0;
+}
+
+.current-branch .commit-row__message {
+  color: white;
+}
+
+.current-branch .commit-row__author {
+  color: white;
+}
+
+.current-branch .commit-row__hash {
+  color: white;
+}
+
+.current-branch:hover {
+  background: var(--color-primary-hover);
 }

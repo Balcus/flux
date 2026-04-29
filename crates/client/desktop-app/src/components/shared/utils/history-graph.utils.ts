@@ -48,6 +48,8 @@ export function buildLayout(
     maxLane = Math.max(maxLane, myLane);
     rows.push({ node, lane: myLane, color: myColor });
 
+    let myLaneContinued = false;
+
     for (let pi = 0; pi < parents.length; pi++) {
       const parentId = parents[pi];
       const parentRow = nodeIndex[parentId];
@@ -61,6 +63,7 @@ export function buildLayout(
         pLane = myLane;
         pColor = myColor;
         laneOf[parentId] = { lane: pLane, color: pColor };
+        myLaneContinued = true;
       } else {
         pLane = freeLanes.length > 0 ? freeLanes.shift()! : nextLane++;
         pColor = LANE_COLORS[pLane % LANE_COLORS.length];
@@ -77,7 +80,7 @@ export function buildLayout(
       });
     }
 
-    if (parents.length === 0) {
+    if (!myLaneContinued) {
       freeLanes.push(myLane);
       freeLanes.sort((a, b) => a - b);
     }

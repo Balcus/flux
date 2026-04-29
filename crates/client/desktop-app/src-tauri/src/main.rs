@@ -28,6 +28,7 @@ fn main() {
             commands::commit,
             commands::switch_branch,
             commands::delete_branch,
+            commands::create_branch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

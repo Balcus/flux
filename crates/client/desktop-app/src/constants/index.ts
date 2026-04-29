@@ -37,6 +37,7 @@ export interface MenuItem {
 }
 
 export const BRANCH_CONTEXT_MENU_ID = "branch-context-menu";
+export const BRANCHES_HEADER_CONTEXT_MENU_ID = "branches-header-context-menu";
 
 export const MENU_ITEMS: MenuItem[] = [
   {

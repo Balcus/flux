@@ -1,5 +1,10 @@
 import { useState, useEffect } from "react";
-import { BRANCH_CONTEXT_MENU_ID, MENU_ITEMS, MenuItem } from "../../constants";
+import {
+  BRANCH_CONTEXT_MENU_ID,
+  BRANCHES_HEADER_CONTEXT_MENU_ID,
+  MENU_ITEMS,
+  MenuItem,
+} from "../../constants";
 import { useRepository } from "../../context/RepositoryContext";
 import { Branch } from "../../models/Branch";
 import { useNavigate } from "react-router-dom";
@@ -11,6 +16,7 @@ import {
 } from "react-contexify";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "react-toastify";
+import Popup from "../common/Popup";
 
 import "./Menu.css";
 import "react-contexify/ReactContexify.css";
@@ -21,6 +27,8 @@ export default function Menu() {
     "branches",
   ]);
   const [branches, setBranches] = useState<MenuItem[]>([]);
+  const [openNewBranchPopup, setOpenNewBranchPopup] = useState<boolean>(false);
+  const [newBranchName, setNewBranchName] = useState<string>();
   const { repository, refreshRepository } = useRepository();
   const { show } = useContextMenu({ id: BRANCH_CONTEXT_MENU_ID });
   const nav = useNavigate();
@@ -74,6 +82,22 @@ export default function Menu() {
     console.log("rename:", props?.branchName);
   };
 
+  const handleCreateNewBranch = async () => {
+    if (!newBranchName) {
+      return;
+    }
+
+    try {
+      await invoke("create_branch", { name: newBranchName });
+      await refreshRepository();
+      toast.success(`Created branch ${newBranchName}`);
+    } catch (error: any) {
+      toast.error(error);
+    } finally {
+      setOpenNewBranchPopup(false);
+    }
+  };
+
   const handleItemClick = (item: MenuItem) => {
     if (item.children?.length) {
       setExpandedItems((prev) =>
@@ -90,40 +114,49 @@ export default function Menu() {
     item: MenuItem,
     isChild = false,
     contextMenuId?: string,
-  ) => (
-    <li key={item.id} className={isChild ? "child" : ""}>
-      <button
-        onClick={() => handleItemClick(item)}
-        onContextMenu={
-          contextMenuId
-            ? (e) => show({ event: e, props: { branchName: item.label } })
-            : undefined
-        }
-        className={`${isChild ? "" : "section-header"} ${item.className || ""}`}
-      >
-        {!isChild && (
-          <span style={{ marginRight: 6, fontSize: 10 }}>
-            {expandedItems.includes(item.id) ? "▾" : "▸"}
-          </span>
-        )}
-        {item.icon && (
-          <img
-            src={item.icon}
-            alt=""
-            style={{ width: 14, height: 14, marginRight: 6, opacity: 0.5 }}
-          />
-        )}
-        {item.label}
-      </button>
-      {item.children && expandedItems.includes(item.id) && (
-        <ul>
-          {item.children.map((child) =>
-            renderMenuItem(child, true, item.contextMenuId),
+  ) => {
+    const effectiveMenuId =
+      item.id === "branches" ? BRANCHES_HEADER_CONTEXT_MENU_ID : contextMenuId;
+
+    return (
+      <li key={item.id} className={isChild ? "child" : ""}>
+        <button
+          onClick={() => handleItemClick(item)}
+          onContextMenu={(e) => {
+            if (effectiveMenuId) {
+              show({
+                event: e,
+                id: effectiveMenuId,
+                props: { branchName: item.label },
+              });
+            }
+          }}
+          className={`${isChild ? "" : "section-header"} ${item.className || ""}`}
+        >
+          {!isChild && (
+            <span style={{ marginRight: 6, fontSize: 10 }}>
+              {expandedItems.includes(item.id) ? "▾" : "▸"}
+            </span>
           )}
-        </ul>
-      )}
-    </li>
-  );
+          {item.icon && (
+            <img
+              src={item.icon}
+              alt=""
+              style={{ width: 14, height: 14, marginRight: 6, opacity: 0.5 }}
+            />
+          )}
+          {item.label}
+        </button>
+        {item.children && expandedItems.includes(item.id) && (
+          <ul>
+            {item.children.map((child) =>
+              renderMenuItem(child, true, item.contextMenuId),
+            )}
+          </ul>
+        )}
+      </li>
+    );
+  };
 
   const finalMenu = MENU_ITEMS.map((item) =>
     item.id === "branches" ? { ...item, children: branches } : item,
@@ -149,6 +182,37 @@ export default function Menu() {
         <Item onClick={handleRename}>Rename</Item>
         <Item onClick={handleDelete}>Delete</Item>
       </ContextMenu>
+
+      <ContextMenu id={BRANCHES_HEADER_CONTEXT_MENU_ID}>
+        <Item onClick={() => setOpenNewBranchPopup(true)}>New</Item>
+      </ContextMenu>
+
+      <Popup
+        showPopUp={openNewBranchPopup}
+        closePopUp={() => setOpenNewBranchPopup(false)}
+      >
+        <div className="new-branch-popup">
+          <h2>Create new branch</h2>
+          <input
+            type="text"
+            placeholder="Branch name"
+            value={newBranchName}
+            onChange={(e) => setNewBranchName(e.target.value)}
+            autoFocus
+          />
+
+          <footer>
+            <button onClick={() => setOpenNewBranchPopup(false)}>Cancel</button>
+            <button
+              className="primary"
+              disabled={!newBranchName}
+              onClick={handleCreateNewBranch}
+            >
+              Create
+            </button>
+          </footer>
+        </div>
+      </Popup>
     </div>
   );
 }

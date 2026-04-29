@@ -18,6 +18,9 @@ export default function History() {
   const [scrollTop, setScrollTop] = useState(0);
   const { repository } = useRepository();
 
+  const currentBranch =
+    repository?.branches.find((b) => b.is_current)?.name ?? null;
+
   const fetchGraph = useCallback(() => {
     invoke<CommitGraph>("get_graph")
       .then((graph) => setLayout(buildLayout(graph.nodes, graph.edges)))
@@ -68,6 +71,7 @@ export default function History() {
               key={rows[vItem.index].node.id}
               row={rows[vItem.index]}
               graphWidth={graphWidth}
+              currentBranch={currentBranch}
               style={{
                 position: "absolute",
                 top: vItem.start,

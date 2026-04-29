@@ -269,3 +269,15 @@ pub fn delete_branch(name: String, state: State<AppState>) -> Result<(), String>
 
     Ok(())
 }
+
+#[tauri::command]
+pub fn create_branch(name: String, state: State<AppState>) -> Result<(), String> {
+    let mut repo_lock = state.repository.lock().unwrap();
+    let repo = repo_lock
+        .as_mut()
+        .ok_or_else(|| "No repository open".to_string())?;
+
+    repo.new_branch(&name).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
