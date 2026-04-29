@@ -4,9 +4,9 @@ import { open } from "@tauri-apps/plugin-dialog";
 import OpenRepositoryBg from "../../assets/images";
 import { toast } from "react-toastify";
 import { BrowseIcon, CloneIcon, OpenIcon } from "../../assets/icons";
-import Popup from "../Shared/Popup";
 
 import "./OpenRepository.css";
+import Popup from "../common/Popup";
 
 export default function OpenRepository() {
   const { openRepository, isLoading, error } = useRepository();

@@ -1,77 +1,48 @@
 .history-container {
   width: 100%;
   height: 100%;
-  background: var(--color-bg-secondary);
-}
-
-.commit-node {
-  width: 240px;
-  background: var(--color-bg-main);
-  border: var(--border);
-  border-radius: 6px;
-  padding: 10px 12px;
-  font-family: var(--font-family);
   display: flex;
   flex-direction: row;
+  overflow: hidden;
+  position: relative;
+  margin-left: 1rem;
+}
+
+.history-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
   align-items: center;
-  gap: 10px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  font-family: var(--font-family);
 }
 
-.commit-icon {
-  width: 28px;
-  height: 28px;
+.history-graph-col {
+  position: sticky;
+  left: 0;
   flex-shrink: 0;
-  opacity: 0.4;
+  overflow: hidden;
+  z-index: 2;
+  height: 100%;
+  pointer-events: none;
 }
 
-.commit-content {
+.history-scroll {
   flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
 }
 
-.commit-heads {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  margin-bottom: 0.25rem;
+.history-scroll::-webkit-scrollbar {
+  width: 6px;
 }
-
-.commit-head {
-  font-size: 9px;
-  font-weight: 600;
-  padding: 1px 6px;
-  background: var(--color-primary);
-  color: #fff;
-  letter-spacing: 0.02em;
+.history-scroll::-webkit-scrollbar-track {
+  background: transparent;
 }
-
-.commit-message {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-text-main);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.3;
-}
-
-.commit-author {
-  margin: 0;
-  font-size: 10px;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.commit-hash {
-  font-size: 9px;
-  color: var(--color-text-muted);
-  opacity: 0.6;
-  letter-spacing: 0.03em;
+.history-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
 }

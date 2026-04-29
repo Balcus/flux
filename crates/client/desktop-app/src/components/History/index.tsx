@@ -1,123 +1,84 @@
-// History.tsx
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import ReactFlow, {
-  Background,
-  BackgroundVariant,
-  Controls,
-  useNodesState,
-  useEdgesState,
-  Handle,
-  Position,
-  NodeProps,
-} from "reactflow";
-import dagre from "@dagrejs/dagre";
-import { CommitIcon } from "../../assets/icons";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { CommitGraph } from "../../models/CommitGraph";
-import { GraphNode } from "../../models/GraphNode";
+import { LayoutResult } from "../../models/HistoryGraphLayout";
+import { buildLayout } from "../shared/utils/history-graph.utils";
+import { GraphColumn } from "./GraphColumn";
+import { CommitRow } from "./CommitRow";
+import { LANE_CONFIG } from "../../constants";
+import { useRepository } from "../../context/RepositoryContext";
 
-import "reactflow/dist/style.css";
 import "./History.css";
 
-const NODE_W = 240;
-const NODE_H = 64;
-
-function layout(graph: CommitGraph) {
-  const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: "BT", ranksep: 50, nodesep: 24 });
-  g.setDefaultEdgeLabel(() => ({}));
-  graph.nodes.forEach((n) =>
-    g.setNode(n.id, { width: NODE_W, height: NODE_H }),
-  );
-  graph.edges.forEach((e) => g.setEdge(e.source, e.target));
-  dagre.layout(g);
-
-  const nodes = graph.nodes.map((n) => {
-    const pos = g.node(n.id);
-    return {
-      id: n.id,
-      type: "commitNode",
-      position: { x: pos.x - NODE_W / 2, y: pos.y - NODE_H / 2 },
-      sourcePosition: Position.Top,
-      targetPosition: Position.Bottom,
-      data: n,
-    };
-  });
-
-  const edges = graph.edges.map((e) => ({
-    id: e.id,
-    source: e.source,
-    target: e.target,
-    style: { stroke: "var(--color-text-main)", strokeWidth: 1.5, opacity: 0.3 },
-  }));
-
-  return { nodes, edges };
-}
-
-function CommitNode({ data }: NodeProps<GraphNode>) {
-  return (
-    <div className="commit-node">
-      <Handle type="source" position={Position.Top} style={{ opacity: 0 }} />
-      <img className="commit-icon" src={CommitIcon} alt="" />
-      <div className="commit-content">
-        {data.branches.length > 0 && (
-          <div className="commit-heads">
-            {data.branches.map((b) => (
-              <span key={b} className="commit-head">
-                {b}
-              </span>
-            ))}
-          </div>
-        )}
-        <p className="commit-message">{data.message}</p>
-        <p className="commit-author">{data.author}</p>
-        <code className="commit-hash">{data.short_id}</code>
-      </div>
-      <Handle type="target" position={Position.Bottom} style={{ opacity: 0 }} />
-    </div>
-  );
-}
-
-const nodeTypes = { commitNode: CommitNode };
-
 export default function History() {
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const { LANE_W, ROW_H } = LANE_CONFIG;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [layout, setLayout] = useState<LayoutResult | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const { repository } = useRepository();
 
   const fetchGraph = useCallback(() => {
     invoke<CommitGraph>("get_graph")
-      .then((graph) => {
-        const { nodes: laid, edges: laidEdges } = layout(graph);
-        setNodes(laid);
-        setEdges(laidEdges);
-      })
+      .then((graph) => setLayout(buildLayout(graph.nodes, graph.edges)))
       .catch(console.error);
   }, []);
 
   useEffect(() => {
     fetchGraph();
-  }, [fetchGraph]);
+  }, [fetchGraph, repository]);
+
+  const handleScroll = useCallback(() => {
+    setScrollTop(scrollRef.current?.scrollTop ?? 0);
+  }, []);
+
+  const virtualizer = useVirtualizer({
+    count: layout?.rows.length ?? 0,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_H,
+    overscan: 8,
+  });
+
+  if (!layout) return <div className="history-empty">Loading history…</div>;
+
+  const { rows, totalLanes, segments } = layout;
+  const graphWidth = totalLanes * LANE_W + LANE_W;
+  const vItems = virtualizer.getVirtualItems();
+  const visibleStart = vItems[0]?.index ?? 0;
+  const visibleEnd = vItems[vItems.length - 1]?.index ?? 0;
 
   return (
     <div className="history-container">
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        nodeTypes={nodeTypes}
-        fitView
-        fitViewOptions={{ padding: 0.3 }}
-        proOptions={{ hideAttribution: true }}
-      >
-        <Background
-          variant={BackgroundVariant.Dots}
-          color="var(--color-border)"
-          gap={15}
-          size={2}
+      <div className="history-graph-col" style={{ width: graphWidth }}>
+        <GraphColumn
+          rows={rows}
+          segments={segments}
+          totalLanes={totalLanes}
+          scrollTop={scrollTop}
+          visibleStart={visibleStart}
+          visibleEnd={visibleEnd}
         />
-        <Controls />
-      </ReactFlow>
+      </div>
+      <div className="history-scroll" ref={scrollRef} onScroll={handleScroll}>
+        <div
+          style={{ height: virtualizer.getTotalSize(), position: "relative" }}
+        >
+          {vItems.map((vItem) => (
+            <CommitRow
+              key={rows[vItem.index].node.id}
+              row={rows[vItem.index]}
+              graphWidth={graphWidth}
+              style={{
+                position: "absolute",
+                top: vItem.start,
+                left: 0,
+                right: 0,
+                height: ROW_H,
+              }}
+            />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
