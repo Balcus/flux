@@ -1,173 +1,172 @@
 .open-root {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  width: 100%;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    width: 100%;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
 }
 
 .open-root.dimmed > div {
-  filter: blur(6px);
-  transform: scale(0.98);
-  pointer-events: none;
-  transition:
-    filter 0.3s ease,
-    transform 0.3s ease;
+    filter: blur(6px);
+    transform: scale(0.98);
+    pointer-events: none;
+    transition:
+        filter 0.3s ease,
+        transform 0.3s ease;
 }
 
 .open-root > div {
-  text-align: center;
+    text-align: center;
 }
 
 .open-root h1 {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: var(--color-primary);
-  margin: 0;
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    margin: 0;
 }
 
 .open-root p {
-  font-size: 1rem;
-  color: var(--color-text-muted);
-  margin: 0.25rem 0 2rem 0;
+    font-size: 1rem;
+    color: var(--color-text-muted);
+    margin: 0.25rem 0 2rem 0;
 }
 
 .open-controls {
-  display: flex;
-  gap: 2rem;
-  justify-content: center;
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
 }
 
 .open-controls button {
-  all: unset;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  width: 130px;
-  height: 130px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--color-primary);
-  background: var(--color-bg-main);
-  border: 1px solid var(--color-border);
-  border-radius: 24px;
-  cursor: pointer;
-  transition:
-    transform 0.2s ease,
-    opacity 0.2s ease;
+    all: unset;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    width: 130px;
+    height: 130px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-primary);
+    background: var(--color-bg-main);
+    border: 1px solid var(--color-border);
+    border-radius: 24px;
+    cursor: pointer;
+    transition:
+        transform 0.2s ease,
+        opacity 0.2s ease;
 }
 
 .open-controls button img {
-  width: 40px;
-  height: 40px;
-  object-fit: contain;
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
 }
 
 .open-controls button:hover {
-  transform: translateY(-4px);
+    transform: translateY(-4px);
 }
 .open-controls button:active {
-  transform: scale(0.95);
+    transform: scale(0.95);
 }
 .open-controls button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
-/* clone popup */
 .clone-popup {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 400px;
 }
 
 .clone-popup h2 {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--color-primary);
-  margin: 0 0 12px 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    margin: 0 0 12px 0;
 }
 
 .clone-popup label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
 }
 
 .clone-popup input {
-  all: unset;
-  width: 100%;
-  padding: 10px 12px;
-  font-size: 13px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  color: var(--color-text-main);
-  background: var(--color-bg-secondary);
-  box-sizing: border-box;
-  margin-bottom: 12px;
+    all: unset;
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 13px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    color: var(--color-text-main);
+    background: var(--color-bg-secondary);
+    box-sizing: border-box;
+    margin-bottom: 12px;
 }
 
 .clone-popup input:focus {
-  border-color: var(--color-primary);
+    border-color: var(--color-primary);
 }
 
 .clone-popup .path-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
 }
 
 .clone-popup .path-row input {
-  flex: 1;
-  margin-bottom: 0;
+    flex: 1;
+    margin-bottom: 0;
 }
 
 .clone-popup .path-row button {
-  all: unset;
-  cursor: pointer;
-  padding: 4px;
-  opacity: 0.6;
+    all: unset;
+    cursor: pointer;
+    padding: 4px;
+    opacity: 0.6;
 }
 
 .clone-popup .path-row button:hover {
-  opacity: 1;
+    opacity: 1;
 }
 
 .clone-popup footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 4px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
 }
 
 .clone-popup footer button {
-  all: unset;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 8px 18px;
-  border-radius: 6px;
-  border: 1px solid var(--color-border);
-  color: var(--color-text-muted);
-  font-family: var(--font-family);
+    all: unset;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 18px;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    font-family: var(--font-family);
 }
 
 .clone-popup footer button.primary {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: white;
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
 }
 
 .clone-popup footer button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+    opacity: 0.5;
+    cursor: not-allowed;
 }

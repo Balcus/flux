@@ -4,5 +4,5 @@ pub mod diff;
 pub mod dircache;
 pub mod internals;
 pub mod status;
-pub mod utils;
 pub mod traversal;
+pub mod utils;

@@ -244,3 +244,40 @@ pub fn commit(message: String, state: State<AppState>) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     Ok(())
 }
+
+#[tauri::command]
+pub fn switch_branch(name: String, force: bool, state: State<AppState>) -> Result<(), String> {
+    let mut repo_lock = state.repository.lock().unwrap();
+    let repo = repo_lock
+        .as_mut()
+        .ok_or_else(|| "No repository open".to_string())?;
+
+    repo.switch_branch(&name, force)
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn delete_branch(name: String, state: State<AppState>) -> Result<(), String> {
+    let mut repo_lock = state.repository.lock().unwrap();
+    let repo = repo_lock
+        .as_mut()
+        .ok_or_else(|| "No repository open".to_string())?;
+
+    repo.delete_branch(&name).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn create_branch(name: String, state: State<AppState>) -> Result<(), String> {
+    let mut repo_lock = state.repository.lock().unwrap();
+    let repo = repo_lock
+        .as_mut()
+        .ok_or_else(|| "No repository open".to_string())?;
+
+    repo.new_branch(&name).map_err(|e| e.to_string())?;
+
+    Ok(())
+}

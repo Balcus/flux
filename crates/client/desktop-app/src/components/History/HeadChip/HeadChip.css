@@ -1,0 +1,11 @@
+.branch-pill {
+  display: inline-block;
+  font-size: 0.55rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+}
