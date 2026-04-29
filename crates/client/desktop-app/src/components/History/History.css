@@ -46,3 +46,19 @@
     background: var(--color-border);
     border-radius: 3px;
 }
+
+.commit-author {
+  margin: 0;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.commit-hash {
+  font-size: 9px;
+  color: var(--color-text-muted);
+  opacity: 0.6;
+  letter-spacing: 0.03em;
+}
