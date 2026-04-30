@@ -61,10 +61,7 @@ export default function OpenRepository() {
         </div>
       </div>
 
-      <Popup
-        showPopUp={openClonePopup}
-        closePopUp={() => setOpenClonePopup(false)}
-      >
+      <Popup showPopUp={openClonePopup}>
         <div className="clone-popup">
           <h2>Clone Repository</h2>
           <label>Destination Folder</label>

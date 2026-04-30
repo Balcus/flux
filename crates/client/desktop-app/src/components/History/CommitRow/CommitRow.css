@@ -1,90 +1,80 @@
 .commit-row {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  box-sizing: border-box;
-  cursor: default;
-  transition: background 80ms ease;
-  user-select: none;
-  border-bottom: 0.5px solid var(--color-border);
-  border-radius: 12px 0 0 12px;;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    box-sizing: border-box;
+    cursor: default;
+    transition: background 80ms ease;
+    user-select: none;
+    border-bottom: 0.5px solid var(--color-border);
+    border-radius: 12px 0 0 12px;
+    border-left: 3px solid transparent;
 }
 
 .current-branch {
-  background-color: var(--color-primary);
+    border-left: 6px solid var(--color-primary);
 }
 
 .commit-row:hover {
-  background: var(--color-bg-secondary);
+    background: var(--color-bg-secondary);
+    cursor: pointer;
 }
 
 .commit-row__info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 3px;
-  padding: 0 12px 0 8px;
-  height: 100%;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+    padding: 0 12px 0 8px;
+    height: 100%;
 }
 
 .commit-row__top {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
 }
 
 .commit-row__bottom {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
 }
 
 .commit-row__message {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--color-text-main);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.3;
-  flex: 1;
-  min-width: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-main);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+    flex: 1;
+    min-width: 0;
 }
 
 .commit-row__author {
-  font-size: 10px;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex-shrink: 0;
+    font-size: 10px;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
 }
 
 .commit-row__hash {
-  font-size: 9px;
-  color: var(--color-text-muted);
-  opacity: 0.55;
-  letter-spacing: 0.04em;
-  flex-shrink: 0;
-}
-
-.current-branch .commit-row__message {
-  color: white;
-}
-
-.current-branch .commit-row__author {
-  color: white;
-}
-
-.current-branch .commit-row__hash {
-  color: white;
+    font-size: 9px;
+    color: var(--color-text-muted);
+    opacity: 0.55;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
 }
 
 .current-branch:hover {
-  background: var(--color-primary-hover);
+    background: var(--color-bg-secondary);
 }

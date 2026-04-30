@@ -281,3 +281,16 @@ pub fn create_branch(name: String, state: State<AppState>) -> Result<(), String>
 
     Ok(())
 }
+
+#[tauri::command]
+/// returns all files changed in a commit given the commit id
+pub fn get_tree_changes(commit_id: String, state: State<AppState>) -> Result<Vec<String>, String> {
+    let mut repo_lock = state.repository.lock().unwrap();
+    let repo = repo_lock
+        .as_mut()
+        .ok_or_else(|| "No repository open".to_string())?;
+    let db = Database::open(repo.flux_dir.clone());
+    let commit_map = db.commit_to_map(commit_id).map_err(|e| e.to_string())?;
+    let files_changed: Vec<String> = commit_map.into_keys().collect();
+    Ok(files_changed)
+}

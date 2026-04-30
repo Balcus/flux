@@ -31,6 +31,9 @@ export default function Menu() {
   const [newBranchName, setNewBranchName] = useState<string>();
   const { repository, refreshRepository } = useRepository();
   const { show } = useContextMenu({ id: BRANCH_CONTEXT_MENU_ID });
+  const [currentBranch, setCurrentBranch] = useState<Branch | undefined>(
+    repository?.branches.find((b) => b.is_current),
+  );
   const nav = useNavigate();
 
   useEffect(() => {
@@ -42,6 +45,7 @@ export default function Menu() {
           className: branch.is_current ? "bold" : "",
         })),
       );
+      setCurrentBranch(repository?.branches.find((b) => b.is_current));
     }
   }, [repository]);
 
@@ -187,19 +191,23 @@ export default function Menu() {
         <Item onClick={() => setOpenNewBranchPopup(true)}>New</Item>
       </ContextMenu>
 
-      <Popup
-        showPopUp={openNewBranchPopup}
-        closePopUp={() => setOpenNewBranchPopup(false)}
-      >
+      <Popup showPopUp={openNewBranchPopup}>
         <div className="new-branch-popup">
-          <h2>Create new branch</h2>
-          <input
-            type="text"
-            placeholder="Branch name"
-            value={newBranchName}
-            onChange={(e) => setNewBranchName(e.target.value)}
-            autoFocus
-          />
+          <span>Currnet branch: </span>
+          <div className="current">
+            <p>{currentBranch?.name}</p>
+          </div>
+
+          <div className="branch-name-field">
+            <label>New branch</label>
+            <input
+              type="text"
+              placeholder="Branch name"
+              value={newBranchName}
+              onChange={(e) => setNewBranchName(e.target.value)}
+              autoFocus
+            />
+          </div>
 
           <footer>
             <button onClick={() => setOpenNewBranchPopup(false)}>Cancel</button>
