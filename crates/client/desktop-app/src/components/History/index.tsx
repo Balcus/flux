@@ -8,6 +8,7 @@ import { GraphColumn } from "./GraphColumn";
 import { CommitRow } from "./CommitRow";
 import { LANE_CONFIG } from "../../constants";
 import { useRepository } from "../../context/RepositoryContext";
+import TreeContents from "./TreeContents";
 
 import "./History.css";
 
@@ -16,8 +17,8 @@ export default function History() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [layout, setLayout] = useState<LayoutResult | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
+  const [selectedCommitId, setSelectedCommitId] = useState<string | null>(null);
   const { repository } = useRepository();
-
   const currentBranch =
     repository?.branches.find((b) => b.is_current)?.name ?? null;
 
@@ -51,38 +52,49 @@ export default function History() {
   const visibleEnd = vItems[vItems.length - 1]?.index ?? 0;
 
   return (
-    <div className="history-container">
-      <div className="history-graph-col" style={{ width: graphWidth }}>
-        <GraphColumn
-          rows={rows}
-          segments={segments}
-          totalLanes={totalLanes}
-          scrollTop={scrollTop}
-          visibleStart={visibleStart}
-          visibleEnd={visibleEnd}
-        />
-      </div>
-      <div className="history-scroll" ref={scrollRef} onScroll={handleScroll}>
-        <div
-          style={{ height: virtualizer.getTotalSize(), position: "relative" }}
-        >
-          {vItems.map((vItem) => (
-            <CommitRow
-              key={rows[vItem.index].node.id}
-              row={rows[vItem.index]}
-              graphWidth={graphWidth}
-              currentBranch={currentBranch}
-              style={{
-                position: "absolute",
-                top: vItem.start,
-                left: 0,
-                right: 0,
-                height: ROW_H,
-              }}
-            />
-          ))}
+    <div className="history-wrapper">
+      <div className="history-container">
+        <div className="history-graph-col" style={{ width: graphWidth }}>
+          <GraphColumn
+            rows={rows}
+            segments={segments}
+            totalLanes={totalLanes}
+            scrollTop={scrollTop}
+            visibleStart={visibleStart}
+            visibleEnd={visibleEnd}
+          />
+        </div>
+        <div className="history-scroll" ref={scrollRef} onScroll={handleScroll}>
+          <div
+            style={{ height: virtualizer.getTotalSize(), position: "relative" }}
+          >
+            {vItems.map((vItem) => (
+              <CommitRow
+                key={rows[vItem.index].node.id}
+                row={rows[vItem.index]}
+                graphWidth={graphWidth}
+                currentBranch={currentBranch}
+                isSelected={rows[vItem.index].node.id === selectedCommitId}
+                onSelect={() => {
+                  setSelectedCommitId(rows[vItem.index].node.id);
+                }}
+                style={{
+                  position: "absolute",
+                  top: vItem.start,
+                  left: 0,
+                  right: 0,
+                  height: ROW_H,
+                }}
+              />
+            ))}
+          </div>
         </div>
       </div>
+      {selectedCommitId && (
+        <div className="history-tree-changes">
+          <TreeContents commitId={selectedCommitId} />
+        </div>
+      )}
     </div>
   );
 }

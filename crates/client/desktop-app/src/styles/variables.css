@@ -26,4 +26,7 @@
         brightness(0.9);
     --filter-deleted: invert(20%) sepia(90%) saturate(700%) hue-rotate(340deg)
         brightness(0.9);
+
+    --contexify-activeItem-color: #ffffff;
+    --contexify-activeItem-bgColor: #3772f0;
 }

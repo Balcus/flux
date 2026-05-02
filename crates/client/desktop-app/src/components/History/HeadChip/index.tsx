@@ -1,3 +1,5 @@
+import { BranchIcon } from "../../../assets/icons";
+
 import "./HeadChip.css";
 
 interface HeadChipProps {
@@ -7,8 +9,9 @@ interface HeadChipProps {
 
 export function HeadChip({ name, color }: HeadChipProps) {
   return (
-    <span className="branch-pill" style={{ backgroundColor: color }}>
-      {name}
+    <span className="head-chip">
+      <img src={BranchIcon} />
+      <span style={{ color: `${color}` }}>{name}</span>
     </span>
   );
 }

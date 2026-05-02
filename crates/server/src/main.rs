@@ -42,6 +42,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let push_service = FluxPushService::new(upload_root.clone(), shared_store.clone());
     let clone_service = FluxCloneService::new(upload_root.clone());
 
+    println!("Server started on port: {port}.");
+
     Server::builder()
         .add_service(AuthServiecServer::new(auth_service))
         .add_service(PushServiceServer::new(push_service))

@@ -12,11 +12,10 @@ use std::io;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
-const IGNORE: [&str; 3] = [".", "..", ".flux"];
-
 #[derive(Debug)]
 pub struct WorkTree {
     path: PathBuf,
+    ignore: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -27,7 +26,52 @@ enum TreeNode {
 
 impl WorkTree {
     pub fn new(project_path: PathBuf) -> Self {
-        Self { path: project_path }
+        let mut ignore = vec![".".to_string(), "..".to_string(), ".flux".to_string()];
+
+        for ignore_file in &[".fluxignore", ".gitignore", ".ignore"] {
+            let path = project_path.join(ignore_file);
+            if let Ok(contents) = std::fs::read_to_string(&path) {
+                for line in contents.lines() {
+                    let line = line.trim();
+                    if !line.is_empty() && !line.starts_with('#') {
+                        ignore.push(line.to_string());
+                    }
+                }
+            }
+        }
+
+        Self {
+            path: project_path,
+            ignore,
+        }
+    }
+
+    fn glob_match(pattern: &str, name: &str) -> bool {
+        let parts: Vec<&str> = pattern.splitn(2, '*').collect();
+        match parts.as_slice() {
+            [prefix, suffix] => name.starts_with(prefix) && name.ends_with(suffix),
+            _ => pattern == name,
+        }
+    }
+
+    pub fn is_ignored(&self, filename: &str, is_dir: bool) -> bool {
+        for pattern in &self.ignore {
+            let dir_only = pattern.ends_with('/');
+            let clean = pattern.trim_end_matches('/').trim_start_matches('/');
+
+            if dir_only && !is_dir {
+                continue;
+            }
+
+            if clean.contains('*') {
+                if Self::glob_match(clean, filename) {
+                    return true;
+                }
+            } else if clean == filename {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn list_files(&self, path: Option<&Path>) -> anyhow::Result<Vec<PathBuf>> {
@@ -39,13 +83,17 @@ impl WorkTree {
             .unwrap_or_else(|_| current_path.to_path_buf());
 
         if current_path.is_dir() {
+            let local_ignore = self.load_local_ignores(current_path);
             let mut all_files = Vec::new();
             for entry in fs::read_dir(current_path)? {
                 let entry = entry?;
                 let filename = entry.file_name();
                 let filename_str = filename.to_str().unwrap_or("");
+                let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
 
-                if !IGNORE.contains(&filename_str) {
+                if !self.is_ignored(filename_str, is_dir)
+                    && !Self::is_locally_ignored(&local_ignore, filename_str, is_dir)
+                {
                     let child_path = entry.path();
                     let mut sub_files = self.list_files(Some(&child_path))?;
                     all_files.append(&mut sub_files);
@@ -70,7 +118,9 @@ impl WorkTree {
             let entry = entry?;
             let filename = entry.file_name();
             let filename_str = filename.to_str().unwrap_or("");
-            if !IGNORE.contains(&filename_str) {
+            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+
+            if !self.is_ignored(filename_str, is_dir) {
                 let relative = entry
                     .path()
                     .strip_prefix(&self.path)
@@ -339,6 +389,45 @@ impl WorkTree {
     pub fn path(&self) -> &Path {
         &self.path
     }
+
+    pub fn load_local_ignores(&self, dir: &Path) -> Vec<String> {
+        let mut local = Vec::new();
+        for ignore_file in &[".fluxignore", ".gitignore", ".ignore"] {
+            let path = dir.join(ignore_file);
+            if path == self.path.join(ignore_file) {
+                continue; // already loaded at root
+            }
+            if let Ok(contents) = std::fs::read_to_string(&path) {
+                for line in contents.lines() {
+                    let line = line.trim();
+                    if !line.is_empty() && !line.starts_with('#') {
+                        local.push(line.to_string());
+                    }
+                }
+            }
+        }
+        local
+    }
+
+    pub fn is_locally_ignored(patterns: &[String], filename: &str, is_dir: bool) -> bool {
+        for pattern in patterns {
+            let dir_only = pattern.ends_with('/');
+            let clean = pattern.trim_end_matches('/').trim_start_matches('/');
+
+            if dir_only && !is_dir {
+                continue;
+            }
+
+            if clean.contains('*') {
+                if Self::glob_match(clean, filename) {
+                    return true;
+                }
+            } else if clean == filename {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 #[cfg(test)]
@@ -558,6 +647,54 @@ mod tests {
         work_tree.make_dir(path)?;
         assert!(tmp.path().join(path).is_dir());
         assert!(!tmp.path().join(path).is_file());
+
+        Ok(())
+    }
+
+    #[test]
+    fn ignores_directory_from_fluxignore() -> anyhow::Result<()> {
+        let tmp = tempdir()?;
+        let repo_path = tmp.path();
+
+        fs::write(repo_path.join(".fluxignore"), "target/\n")?;
+
+        let work_tree = WorkTree::new(repo_path.to_path_buf());
+
+        fs::write(repo_path.join("main.rs"), "fn main() {}")?;
+        fs::create_dir(repo_path.join("target"))?;
+        fs::write(repo_path.join("target").join("binary"), "binary")?;
+
+        let mut files = work_tree.list_files(None)?;
+        files.sort();
+
+        assert_eq!(
+            files,
+            vec![PathBuf::from(".fluxignore"), PathBuf::from("main.rs")]
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn ignores_glob_pattern_from_gitignore() -> anyhow::Result<()> {
+        let tmp = tempdir()?;
+        let repo_path = tmp.path();
+
+        fs::write(repo_path.join(".gitignore"), "*.log\n")?;
+
+        let work_tree = WorkTree::new(repo_path.to_path_buf());
+
+        fs::write(repo_path.join("main.rs"), "fn main() {}")?;
+        fs::write(repo_path.join("debug.log"), "log data")?;
+        fs::write(repo_path.join("error.log"), "log data")?;
+
+        let mut files = work_tree.list_files(None)?;
+        files.sort();
+
+        assert_eq!(
+            files,
+            vec![PathBuf::from(".gitignore"), PathBuf::from("main.rs"),]
+        );
 
         Ok(())
     }

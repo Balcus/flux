@@ -49,7 +49,7 @@ impl UserStore {
         access_token: String,
     ) -> Result<()> {
         if self.map.contains_key(&user_email) {
-            return Err(error::UserStoreError::EmailAlredyRegistered(user_email));
+            return Ok(());
         }
         let entry = UserStoreEntry {
             user_name,

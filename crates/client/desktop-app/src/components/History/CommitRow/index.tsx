@@ -8,6 +8,8 @@ interface CommitRowProps {
   graphWidth: number;
   style: React.CSSProperties;
   currentBranch: string | null;
+  isSelected: boolean;
+  onSelect: () => void;
 }
 
 export function CommitRow({
@@ -15,6 +17,7 @@ export function CommitRow({
   graphWidth,
   style,
   currentBranch,
+  onSelect,
 }: CommitRowProps) {
   const { node } = row;
   const isCurrentBranchHead =
@@ -23,12 +26,13 @@ export function CommitRow({
     <div
       className={`commit-row${isCurrentBranchHead ? " current-branch" : ""}`}
       style={style}
+      onClick={onSelect}
     >
       <div style={{ width: graphWidth, flexShrink: 0 }} />
       <div className="commit-row__info">
         <div className="commit-row__top">
           {node.branches.map((branch) => (
-            <HeadChip name={branch} color={row.color} />
+            <HeadChip key={branch} name={branch} color={row.color} />
           ))}
           <span className="commit-row__message">{node.message}</span>
         </div>

@@ -12,7 +12,7 @@ import { Repository } from "../models/Repository";
 import { open } from "@tauri-apps/plugin-dialog";
 
 interface RepositoryContextType extends RepositoryState {
-  openRepository: () => Promise<void>;
+  openRepository: (path?: string) => Promise<void>;
   closeRepository: () => void;
   refreshRepository: () => Promise<void>;
   clearError: () => void;
@@ -20,7 +20,7 @@ interface RepositoryContextType extends RepositoryState {
 
 function repositoryReducer(
   state: RepositoryState,
-  action: RepositoryAction
+  action: RepositoryAction,
 ): RepositoryState {
   switch (action.type) {
     case "LOADING_START":
@@ -83,7 +83,7 @@ function repositoryReducer(
 }
 
 const RepositoryContext = createContext<RepositoryContextType | undefined>(
-  undefined
+  undefined,
 );
 const STORAGE_KEY = "flux_last_repository";
 
@@ -131,13 +131,15 @@ export function RepositoryProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const openRepository = async () => {
+  const openRepository = async (path?: string) => {
     try {
-      const selected = await open({
-        directory: true,
-        multiple: false,
-        title: "Open Flux Repository",
-      });
+      const selected =
+        path ??
+        (await open({
+          directory: true,
+          multiple: false,
+          title: "Open Flux Repository",
+        }));
 
       if (selected) {
         await loadRepository(selected);

@@ -107,7 +107,7 @@ impl Status {
     ) -> Result<Vec<String>> {
         let mut untracked = Vec::new();
         Self::scan_directory(
-            repo.work_tree.path(),
+            &repo.work_tree,
             repo.work_tree.path(),
             index,
             &mut untracked,
@@ -117,24 +117,27 @@ impl Status {
     }
 
     fn scan_directory(
-        root: &Path,
+        work_tree: &WorkTree,
         current: &Path,
         index: &HashMap<String, String>,
         untracked: &mut Vec<String>,
     ) -> Result<()> {
-        if current.ends_with(".flux") {
-            return Ok(());
-        }
+        let local_ignore = work_tree.load_local_ignores(current);
 
         for entry in fs::read_dir(current)? {
             let entry = entry?;
             let path = entry.path();
+            let filename = entry.file_name();
+            let filename_str = filename.to_str().unwrap_or("");
+            let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
 
-            if path.ends_with(".flux") {
+            if work_tree.is_ignored(filename_str, is_dir)
+                || WorkTree::is_locally_ignored(&local_ignore, filename_str, is_dir)
+            {
                 continue;
             }
 
-            let rel_path = path.strip_prefix(root)?;
+            let rel_path = path.strip_prefix(work_tree.path())?;
             let rel_str = rel_path
                 .to_str()
                 .ok_or_else(|| anyhow!("Invalid UTF-8 in path"))?;
@@ -144,7 +147,7 @@ impl Status {
                     untracked.push(rel_str.to_string());
                 }
             } else if path.is_dir() {
-                Self::scan_directory(root, &path, index, untracked)?;
+                Self::scan_directory(work_tree, &path, index, untracked)?;
             }
         }
 
@@ -172,7 +175,9 @@ impl Status {
 
 #[cfg(test)]
 mod tests {
-    use crate::commands::{add::AddCommand, command::Command, commit::CommitCommand, init::InitCommand};
+    use crate::commands::{
+        add::AddCommand, command::Command, commit::CommitCommand, init::InitCommand,
+    };
 
     use super::*;
     use std::{fs, path::PathBuf};
