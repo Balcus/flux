@@ -4,8 +4,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 import OpenRepositoryBg from "../../assets/images";
 import { toast } from "react-toastify";
 import { BrowseIcon, CloneIcon, OpenIcon } from "../../assets/icons";
-import Popup from "../common/Popup";
 import { invoke } from "@tauri-apps/api/core";
+import Popup from "../common/Popup";
 
 import "./OpenRepository.css";
 
