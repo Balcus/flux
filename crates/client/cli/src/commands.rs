@@ -2,7 +2,9 @@ use std::path::PathBuf;
 
 use flux_core::{
     commands::{
-        add::AddCommand, command::Command, commit::CommitCommand, diff::DiffCommand, hash_object::HashObject, init::InitCommand, log::LogCommand, reset::ResetCommand, restore::RestoreCommand, rm::RmCommand, status::StatusCommand
+        add::AddCommand, command::Command, commit::CommitCommand, diff::DiffCommand,
+        hash_object::HashObject, init::InitCommand, log::LogCommand, reset::ResetCommand,
+        restore::RestoreCommand, rm::RmCommand, status::StatusCommand,
     },
     internals::repository::Repository,
 };
@@ -100,7 +102,7 @@ pub fn restore_fs(repo_path: Option<String>) -> anyhow::Result<()> {
 }
 
 pub async fn clone(url: String, path: Option<String>) -> anyhow::Result<()> {
-    let _repository = Repository::clone(url, path).await?;
+    let _repository = Repository::clone_repository(url, path).await?;
     Ok(())
 }
 
@@ -113,6 +115,7 @@ pub fn status(repo_path: Option<String>) -> anyhow::Result<()> {
 pub async fn auth(repo_path: Option<String>, url: Option<String>) -> anyhow::Result<()> {
     let mut repository = Repository::open(repo_path)?;
     repository.auth(url).await?;
+    println!("Authentication successful.");
     Ok(())
 }
 

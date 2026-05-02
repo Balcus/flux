@@ -8,7 +8,7 @@ import { GraphColumn } from "./GraphColumn";
 import { CommitRow } from "./CommitRow";
 import { LANE_CONFIG } from "../../constants";
 import { useRepository } from "../../context/RepositoryContext";
-import TreeChanges from "./TreeChanges";
+import TreeContents from "./TreeContents";
 
 import "./History.css";
 
@@ -92,7 +92,7 @@ export default function History() {
       </div>
       {selectedCommitId && (
         <div className="history-tree-changes">
-          <TreeChanges commitId={selectedCommitId} />
+          <TreeContents commitId={selectedCommitId} />
         </div>
       )}
     </div>

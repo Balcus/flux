@@ -84,7 +84,7 @@ impl Repository {
         Ok(())
     }
 
-    pub async fn clone(url: String, path: Option<String>) -> anyhow::Result<Self> {
+    pub async fn clone_repository(url: String, path: Option<String>) -> anyhow::Result<Self> {
         let mut client = GrpcClient::connect_remote(url).await?;
         let repo_name = client.repo_name()?;
         let archive = client.clone_repository().await?;
@@ -265,7 +265,10 @@ impl Repository {
 
         if !force {
             let status = self.load_status()?;
-            if status.has_staged_changes() || status.has_unstaged_changes() || status.has_untracked_files() {
+            if status.has_staged_changes()
+                || status.has_unstaged_changes()
+                || status.has_untracked_files()
+            {
                 bail!(
                     "Switching branches would overwrite the current changes. Please discard them or use the force flag"
                 );

@@ -294,3 +294,11 @@ pub fn get_tree_changes(commit_id: String, state: State<AppState>) -> Result<Vec
     let files_changed: Vec<String> = commit_map.into_keys().collect();
     Ok(files_changed)
 }
+
+#[tauri::command]
+pub async fn clone_repository(repo_url: String, dest_path: String) -> Result<(), String> {
+    Repository::clone_repository(repo_url, Some(dest_path))
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}

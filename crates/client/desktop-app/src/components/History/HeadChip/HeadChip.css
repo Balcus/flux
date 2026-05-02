@@ -1,4 +1,4 @@
-.branch-pill {
+.head-chip {
     display: inline-flex;
     align-items: center;
     gap: 3px;
@@ -16,14 +16,14 @@
     box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-.branch-pill img {
+.head-chip img {
     height: 8px;
     width: 8px;
     flex-shrink: 0;
     filter: brightness(0) saturate(100%);
 }
 
-.branch-pill span {
+.head-chip span {
     font-size: 0.55rem;
     font-weight: 600;
     letter-spacing: 0.02em;

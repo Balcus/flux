@@ -4,9 +4,10 @@ import { open } from "@tauri-apps/plugin-dialog";
 import OpenRepositoryBg from "../../assets/images";
 import { toast } from "react-toastify";
 import { BrowseIcon, CloneIcon, OpenIcon } from "../../assets/icons";
+import Popup from "../common/Popup";
+import { invoke } from "@tauri-apps/api/core";
 
 import "./OpenRepository.css";
-import Popup from "../common/Popup";
 
 export default function OpenRepository() {
   const { openRepository, isLoading, error } = useRepository();
@@ -21,6 +22,18 @@ export default function OpenRepository() {
       title: "Select Destination Folder",
     });
     if (selected) setDestPath(selected as string);
+  };
+
+  const handleClone = async (repoUrl: string, destPath: string) => {
+    try {
+      await invoke("clone_repository", { repoUrl, destPath });
+      toast.success("Repository cloned successfully");
+      setOpenClonePopup(false);
+      const repoName = repoUrl.split("/").pop() || "";
+      await openRepository(`${destPath}/${repoName}`);
+    } catch (error) {
+      toast.error("Failed to clone repository " + error);
+    }
   };
 
   useEffect(() => {
@@ -50,7 +63,7 @@ export default function OpenRepository() {
         <h1>flux</h1>
         <p>Distributed Version Control made Easy</p>
         <div className="open-controls">
-          <button onClick={openRepository} disabled={isLoading}>
+          <button onClick={() => openRepository()} disabled={isLoading}>
             <img src={OpenIcon} alt="" />
             <span>Open</span>
           </button>
@@ -93,7 +106,7 @@ export default function OpenRepository() {
             <button
               className="primary"
               disabled={!repoUrl || !destPath}
-              onClick={() => setOpenClonePopup(false)}
+              onClick={() => handleClone(repoUrl, destPath)}
             >
               Clone
             </button>
