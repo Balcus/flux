@@ -1,21 +1,60 @@
 <img src="./assets/desktop_app.png" alt="Application Screenshot">
 
 # Flux
-### Version Control Made Easy
 
-Flux is a distributed version control system designed to be as useful as git for small to medium projects, while providing a simpler and more intuitive API.
+### Controlul versiunilor simplificat
 
-This project consists of two main components: **Client** and **Server**.
+Flux este un sistem distribuit de control al versiunilor conceput pentru a oferi funcționalități similare cu Git pentru proiecte mici și medii printr-o interfață simplă și intuitivă.
 
-- **Client**:  
-  The client supports multiple local operations such as hashing files, writing them to the object store, updating the index, creating commits and creating, switching or deleting branches. The core library provides the client with all of these functionalities. Additionally, it includes a gRPC client that implements the two most basic commands: `clone` and `push`.
+Proiectul este alcătuit din două componente principale: **Client** și **Server**.
 
-- **Server**:  
-  The server handles requests from the client using the shared **proto library**, which defines the services and messages for communication between client and server.
+ ## Client
 
-Additionally, the project includes a `justfile` containing the most common commands for building, linting, and running the project.
+Suportă operații locale precum calcularea hashing-ul fișierelor, stocarea obiectelor, actualizarea indexului, crearea de commit-uri și gestionarea branch-urilor (creare, schimbare și ștergere). Acesta include și un client gRPC care implementează comenzile de bază `clone` și `push`.
 
-# List of supported commands:
+## Server
+
+Primește și procesează cererile venite de la client prin intermediul bibliotecii comune proto, care definește serviciile și mesajele utilizate pentru comunicarea dintre client și server. Serverul gestionează autentificarea utilizatorilor și se ocupă de salvarea și organizarea repository-urilor pe disk, oferind acces securizat la acestea pe baza credențialelor primite de la client.
+
+Proiectul include și un fișier `justfile` cu cele mai utilizate comenzi pentru compilare, verificare și rulare.
+
+# Dependențe
+
+Pentru compilarea și rularea proiectului sunt necesare:
+
+* Rust (toolchain stabil)
+* Cargo
+* Protocol Buffers (`protoc`)
+* Just
+
+# Rulare locală
+
+1. Clonează repository-ul:
+
+```bash
+git clone "https://github.com/Balcus/flux.git"
+cd flux
+```
+
+2. Compilează proiectul:
+
+```bash
+just build
+```
+
+3. Pornește serverul:
+
+```bash
+just server
+```
+
+4. Într-un alt terminal, pornește clientul desktop:
+
+```bash
+just desktop
+```
+
+# Comenzi suportate
 
 ### Porcelain
 
