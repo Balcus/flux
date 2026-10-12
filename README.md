@@ -2,81 +2,51 @@
 
 # Flux
 
-### Controlul versiunilor simplificat
+Hopefully simple distributed version control system.
 
-Flux este un sistem distribuit de control al versiunilor conceput pentru a oferi funcționalități similare cu Git pentru proiecte mici și medii printr-o interfață simplă și intuitivă.
+## Overview
 
-Proiectul este alcătuit din două componente principale: **Client** și **Server**.
+Flux has two components:
 
- ## Client
+- **Client**: handles local operations (file hashing, object storage, index updates, commits, branch management) and includes a gRPC client for `clone` and `push`.
+- **Server**: handles client requests through a shared proto library, manages user authentication, and stores repositories on disk with credential-based access.
 
-Suportă operații locale precum calcularea hashing-ul fișierelor, stocarea obiectelor, actualizarea indexului, crearea de commit-uri și gestionarea branch-urilor (creare, schimbare și ștergere). Acesta include și un client gRPC care implementează comenzile de bază `clone` și `push`.
+A `justfile` is included with the most common build, check, and run commands.
 
-## Server
+## Tech stack
 
-Primește și procesează cererile venite de la client prin intermediul bibliotecii comune proto, care definește serviciile și mesajele utilizate pentru comunicarea dintre client și server. Serverul gestionează autentificarea utilizatorilor și se ocupă de salvarea și organizarea repository-urilor pe disk, oferind acces securizat la acestea pe baza credențialelor primite de la client.
+Here's a brief high-level overview of the tech stack Flux uses:
 
-Proiectul include și un fișier `justfile` cu cele mai utilizate comenzi pentru compilare, verificare și rulare.
+* This project is written in [Rust](https://www.rust-lang.org/) and built with [Cargo](https://doc.rust-lang.org/cargo/), Rust's package manager and build system.
+* For communication between client and server, Flux uses gRPC. The services and messages are defined in a shared proto library, which is compiled with [Protocol Buffers](https://protobuf.dev/) (`protoc`).
+* Build, check, and run commands are defined in a `justfile` and executed with [Just](https://github.com/casey/just), a simple command runner.
 
-# Dependențe
+## Features
 
-Pentru compilarea și rularea proiectului sunt necesare:
+* Local object storage: files are hashed and stored as objects, like in Git
+* Index and commits: stage changes with the index and create commits
+* Branch management: create, switch, and delete branches
+* Remote operations: `clone` and `push` over gRPC
+* Authentication: the server verifies user credentials and gives secure access to repositories
+* Desktop client: a simple, intuitive interface for everyday use
+* Git-style commands for both porcelain and plumbing
 
-* Rust (toolchain stabil)
-* Cargo
-* Protocol Buffers (`protoc`)
-* Just
-
-# Rulare locală
-
-1. Clonează repository-ul:
+## Running Locally
 
 ```bash
 git clone "https://github.com/Balcus/flux.git"
 cd flux
-```
-
-2. Compilează proiectul:
-
-```bash
 just build
-```
-
-3. Pornește serverul:
-
-```bash
 just server
 ```
 
-4. Într-un alt terminal, pornește clientul desktop:
+Then, in another terminal, start the desktop client:
 
 ```bash
 just desktop
 ```
 
-# Comenzi suportate
+## Supported Commands
 
-### Porcelain
-
-* **`add`**
-* **`branch`**
-* **`clone`**
-* **`commit`**
-* **`delete`**
-* **`diff`**
-* **`init`**
-* **`log`**
-* **`push`**
-* **`reset`**
-* **`restore`**
-* **`set`**
-* **`status`**
-
----
-
-### Plumbing
-
-* **`restore-fs`**
-* **`cat-file`**
-* **`hash-object`**
-* **`commit-tree`**
+Porcelain: `add`, `branch`, `clone`, `commit`, `delete`, `diff`, `init`, `log`, `push`, `reset`, `restore`, `set`, `status`
+Plumbing: `restore-fs`, `cat-file`, `hash-object`, `commit-tree`
